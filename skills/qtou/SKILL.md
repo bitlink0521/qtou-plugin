@@ -32,7 +32,7 @@ description: >-
 
 禁止用户手抄/手填/粘贴 PAT / agent_key 到聊天。禁止引导「去设置页复制 token」作为主路径。
 
-1. 已连接且冒烟工具（如 `documents_search` 或 `portfolio_list`）通则结束。
+1. 已连接且冒烟工具（如 `agent_documents_search` 或 `agent_portfolio_list`）通则结束。
 2. 未装或 401：主动说明要轻投**账密** → Vault 或安全表单（勿往聊天贴密码）。
 3. 代登录 → 签发 agent_key → 写入连接器 / 插件变量。
 4. 冒烟只读工具；key 永不进聊天。
@@ -42,18 +42,18 @@ description: >-
 
 工具只走轻投 Agent API（经 `POST /v1/agent/mcp` 门面），**禁止**插件直连业务库。
 
-| 工具（建议名） | 场景 | 用途 | 语义 |
+| 工具名（与 `AgentMcpService` 一致） | 场景 | 用途 | 语义 |
 | --- | --- | --- | --- |
-| `bp_parse` | ① | `POST /bp/parse` 抽 BP 字段 | 只读，不入库 |
-| `projects_create_pending` | ① | `POST /projects` → pending | **待确认** |
-| `projects_confirm` | ① | `POST /projects/{id}/confirm` 或 reject | **待确认**（人确认后才入池） |
-| `documents_search` | ② | `documents/search?q=` | 只读 |
-| `documents_content` | ② | `documents/{fileId}/content` | 只读 |
-| `dd_draft` | ② | `POST /reports/dd-draft` | 只读初稿（可待确认落库另议） |
-| `portfolio_list` | ③ | `portfolio` 列表 | 只读 |
-| `portfolio_quarterly` | ③ | `portfolio/{id}/quarterly` | 只读 |
-| `risk_alerts_list` | ③ | `GET /risk-alerts` | 只读 |
-| `risk_alerts_create` | ③ | `POST /risk-alerts` | **待确认**（写预警） |
+| `agent_health` | — | 健康检查（确认 Bearer 有效） | 只读 |
+| `agent_bp_parse` | ① | 解析 BP 文本为结构化草稿（不入库） | 只读 |
+| `agent_projects_create_pending` | ① | 创建待确认项目（不直接入池） | **待确认** |
+| `agent_projects_get` | ① | 查询待确认项目 | 只读 |
+| `agent_documents_search` | ② | 模糊查文档 | 只读 |
+| `agent_portfolio_list` | ③ | 投后/项目列表 | 只读 |
+| `agent_risk_alerts_list` | ③ | 风险预警列表 | 只读 |
+| `agent_dicts` | — | 字典 `invest_round` / `industry_type` | 只读 |
+
+> 当前门面**未**暴露 `documents_content` / `dd_draft` / `portfolio_quarterly` / `risk_alerts_create` / `projects_confirm`；skill 演示只用上表已实现工具。写操作保持「待确认」语义；人确认入池若需 HTTP 确认口，另走 Agent API 非 MCP（待门面补齐）。
 
 写操作一律保持「待确认」：先展示将写入的内容，用户明确同意后再调确认类工具。
 
@@ -67,17 +67,17 @@ description: >-
 ### ① BP 入池（最小）
 
 - 用户：「把这段 BP 解析一下，准备入池」
-- Bot：`bp_parse` → 展示 projectName/round/industry → 用户确认后 `projects_create_pending` → 再请人 `projects_confirm`；说明未确认前不进正式池。
+- Bot：`agent_bp_parse` → 展示 projectName/round/industry → 用户确认后 `agent_projects_create_pending` → 用 `agent_projects_get` 核对；说明未确认前不进正式池（MCP 暂无 confirm 工具）。
 
 ### ② 模糊查文档 → 尽调初稿（最小）
 
 - 用户：「搜一下云道的 BP，出个尽调初稿」
-- Bot：`documents_search({ q: "云道" })` → 取 fileId → `documents_content` → `dd_draft` → 回 markdown 初稿（规则拼接即可）。
+- Bot：`agent_documents_search({ q: "云道" })` → 展示命中列表；内容拉取/尽调初稿待门面补工具后再接。
 
 ### ③ 投后季报 → 风险预警（最小）
 
 - 用户：「青云智行最近季报怎样？要不要记一条政策风险」
-- Bot：`portfolio_list` 找项目 → `portfolio_quarterly` → 展示摘要 → 用户同意后 `risk_alerts_create`（待确认）；或只 `risk_alerts_list` 只读。
+- Bot：`agent_portfolio_list` 找项目 → `agent_risk_alerts_list` 只读预警；季报/写预警待门面补齐。
 
 ## 不做
 
@@ -101,7 +101,7 @@ description: >-
 5. 代调 POST http://127.0.0.1:8081/api/v1/agent/auth/login → 得 agentKey
 6. 写入插件变量 QTOU_CONNECTOR_TOKEN（或 AddMcpServer name=轻投，
    url=http://127.0.0.1:8081/api/v1/agent/mcp，Authorization: Bearer <key>）
-7. 冒烟：documents_search 或 portfolio_list；成功只回「已连上」短句
+7. 冒烟：agent_documents_search 或 agent_portfolio_list；成功只回「已连上」短句
 8. 禁止：让我手抄/粘贴 PAT；禁止把 key 打进聊天；禁止用旧 qtou-mcp:8787 冒充成品
 ```
 
