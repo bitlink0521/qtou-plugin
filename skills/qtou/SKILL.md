@@ -48,12 +48,14 @@ description: >-
 | `agent_bp_parse` | ① | 解析 BP 文本为结构化草稿（不入库） | 只读 |
 | `agent_projects_create_pending` | ① | 创建待确认项目（不直接入池） | **待确认** |
 | `agent_projects_get` | ① | 查询待确认项目 | 只读 |
+| `agent_projects_confirm` | ① | 确认 pending 入正式池 | **待确认后执行** |
+| `agent_projects_reject` | ① | 驳回 pending（可选 reason） | **待确认后执行** |
 | `agent_documents_search` | ② | 模糊查文档 | 只读 |
 | `agent_portfolio_list` | ③ | 投后/项目列表 | 只读 |
 | `agent_risk_alerts_list` | ③ | 风险预警列表 | 只读 |
 | `agent_dicts` | — | 字典 `invest_round` / `industry_type` | 只读 |
 
-> 当前门面**未**暴露 `documents_content` / `dd_draft` / `portfolio_quarterly` / `risk_alerts_create` / `projects_confirm`；skill 演示只用上表已实现工具。写操作保持「待确认」语义；人确认入池若需 HTTP 确认口，另走 Agent API 非 MCP（待门面补齐）。
+> 当前门面**未**暴露 `documents_content` / `dd_draft` / `portfolio_quarterly` / `risk_alerts_create`；入池 confirm/reject 已在 MCP。写操作保持「待确认」：先展示再调 confirm。
 
 写操作一律保持「待确认」：先展示将写入的内容，用户明确同意后再调确认类工具。
 
@@ -67,7 +69,7 @@ description: >-
 ### ① BP 入池（最小）
 
 - 用户：「把这段 BP 解析一下，准备入池」
-- Bot：`agent_bp_parse` → 展示 projectName/round/industry → 用户确认后 `agent_projects_create_pending` → 用 `agent_projects_get` 核对；说明未确认前不进正式池（MCP 暂无 confirm 工具）。
+- Bot：`agent_bp_parse` → 展示 projectName/round/industry → 用户确认后 `agent_projects_create_pending` → 再请人明确同意后 `agent_projects_confirm({ pendingId })`（或 `agent_projects_reject`）；未 confirm 前不进正式池。
 
 ### ② 模糊查文档 → 尽调初稿（最小）
 
