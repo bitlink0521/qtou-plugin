@@ -1,0 +1,32 @@
+{
+  "name": "bitilinks-qtou",
+  "owner": {
+    "name": "Bitilinks",
+    "email": "support@handsels.com"
+  },
+  "metadata": {
+    "description": "轻投 Cursor / Grok Bot 插件（Skill + MCP）",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "qtou",
+      "source": "./",
+      "description": "连接轻投：MCP 三场景 Agent 工具，账密代签 agent_key，禁止手填令牌。",
+      "version": "0.1.0",
+      "author": {
+        "name": "Bitilinks",
+        "email": "support@handsels.com"
+      },
+      "homepage": "https://qtou.cn",
+      "repository": "https://github.com/bitlink0521/qtou-plugin",
+      "license": "MIT",
+      "keywords": [
+        "qtou",
+        "轻投",
+        "mcp",
+        "agent"
+      ]
+    }
+  ]
+}
