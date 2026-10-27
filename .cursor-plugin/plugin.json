@@ -1,0 +1,34 @@
+{
+  "name": "qtou",
+  "version": "0.1.0",
+  "description": "连接轻投：MCP 三场景 Agent 工具，账密代签 agent_key，禁止手填令牌。",
+  "author": {
+    "name": "Bitilinks",
+    "email": "support@handsels.com"
+  },
+  "homepage": "https://qtou.cn",
+  "keywords": [
+    "qtou",
+    "轻投",
+    "mcp",
+    "agent",
+    "venture",
+    "bp",
+    "due-diligence"
+  ],
+  "logo": "assets/logo.svg",
+  "license": "MIT",
+  "variables": {
+    "type": "object",
+    "properties": {
+      "QTOU_CONNECTOR_TOKEN": {
+        "type": "string",
+        "title": "轻投 Agent Key",
+        "description": "Bearer qtpat_…（bot 代登录签发后写入；勿手抄到聊天）"
+      }
+    },
+    "required": [
+      "QTOU_CONNECTOR_TOKEN"
+    ]
+  }
+}
