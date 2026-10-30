@@ -34,7 +34,7 @@
 ## 包含
 
 - **Logo**：`assets/logo.svg`
-- **Skill**：`skills/qtou`（连轻投、三场景 demo；含代签 agent_key；入池 `agent_projects_confirm`/`reject`）
+- **Skill**：`skills/qtou`（连轻投、三场景 demo；含代签 agent_key；入池 `agent_projects_confirm`/`reject`；确认入池后自动补全，见 `PROJECT-ENRICHMENT.md`、`BP-VISUALS.md`）
 - **MCP**：`mcp.json` → 连接器名 **轻投**（随插件生效，不必手填 URL）
 - **变量**：`QTOU_CONNECTOR_TOKEN`（Bearer `qtpat_…`，由 bot 写入插件变量；勿贴到聊天）
 
