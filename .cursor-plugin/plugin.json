@@ -1,6 +1,6 @@
 {
   "name": "qtou",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "连接轻投：MCP 三场景 Agent 工具，账密代签 agent_key，禁止手填令牌。",
   "author": {
     "name": "Bitilinks",
