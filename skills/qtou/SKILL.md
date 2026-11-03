@@ -86,7 +86,7 @@ description: >-
 
 1. `agent_bp_parse`（可选）→ 展示草稿字段。
 2. `agent_projects_create_pending` → 得到 `pendingId`（此时仍非正式池）和只给确认卡用的 `confirmToken`（服务端只存其哈希，绑定 pendingId 与当前用户，限时、confirm 成功后作废）。可直接传 `companyName`（法定全称）。
-3. 必须弹聊天确认卡：客户端支持卡片组件（widget）就用组件；不支持（如 Codex CLI、Cursor 等纯文字客户端）就用一段文字确认卡代替，内容与组件卡相同（项目名、pendingId、置信度/轮次行业缺口、公司全称），末尾问「确认把该项目入正式池？」并列出两个选项，然后停下等用户回复。用户明确回复「确认入池」即视为点了确认；回复含糊时再问一次，不得自行推断。选项至少：
+3. 必须弹聊天确认卡：客户端支持卡片组件（widget）就用组件；不支持（如 Codex CLI、Cursor 等纯文字客户端）就用一段文字确认卡代替，内容与组件卡相同（项目名、pendingId、置信度/轮次行业缺口、公司全称），末尾问「确认把该项目入正式池？」并列出两个选项，然后停下等用户回复。将 `askUser` 按标签列为可选的「需要你补充」清单，不阻塞入池；用户回答后，以其逐字原话为 `statement` 调 `agent_projects_user_fields({ pendingId, statement, fields, confirmed:false })` 预览，无问题再 `confirmed:true` 写入并回读，不猜联系人等值。用户明确回复「确认入池」即视为点了确认；回复含糊时再问一次，不得自行推断。选项至少：
    - 「确认入池」→ 用户点了之后，才调 MCP 工具 `agent_projects_confirm({ pendingId, confirmToken })`，token 取自这张卡。没带或带错 token 的 confirm，服务端一律拒绝（`FAILED_PRECONDITION`）。
    - 「取消/驳回」→ 调 MCP 工具 `agent_projects_reject`，或什么都不调；不得 confirm。
    - 连接器里没有 `agent_projects_confirm` / `reject`（例如 stdio 未更新）：先重连；仍没有就如实报「服务端/连接器缺入池确认工具」并停止，不得改用 HTTP 调 confirm。
