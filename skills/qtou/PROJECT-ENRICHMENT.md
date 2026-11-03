@@ -6,7 +6,7 @@
 
 1. 读取用户项目名/完整公司名、已有BP或已解析字段，保留原值及来源。名称有同名歧义先消歧，不把另一公司的信息拼进来。
 2. 默认Tavily search找官网、官方披露等来源，再extract核对原文；Grok API仅整理可核对事实并输出结构化建议。模型输出不是来源证据，检索失败也不等于没有信息。每项建议保留URL、原文片段与核验状态，冲突/未知留空并解释。
-3. 使用独立CLI `repo/tools/project-enrichment/enrich.py`（相对轻投工作目录），具体完整参数以当前`--help`和该目录README为准。Tavily有运行时env key时可自动search+extract；此Mac没有该key时，Bot必须先使用已连接Tavily插件真实检索与提取，将结果按CLI规定schema存成sources JSON，再交CLI整理，不让缺key退化成模型臆测。
+3. 使用独立CLI `tools/project-enrichment/enrich.py`（相对本skill目录，随插件分发），具体完整参数以当前`--help`和该目录README为准。Tavily有运行时env key时可自动search+extract；此Mac没有该key时，Bot必须先使用已连接Tavily插件真实检索与提取，将结果按CLI规定schema存成sources JSON，再交CLI整理，不让缺key退化成模型臆测。
 4. Grok凭据只通过用户提供的凭据文件读取，CLI引用原文件；禁止复制到项目、生成文件、日志或聊天。失败只报脱敏错误，不回显请求头、key或原异常体。
 5. 输出有来源的补全draft和missing-only patch，先给用户看“原值 / 建议 / 出处 / 未知”。有原值的字段一律不覆盖；空值判断按CLI规则，不把有效的0/false当缺失。用户如要替换已有值，单列建议并重新确认，不擅自套missing-only patch。
 6. 原BP文本可用`--bp-text-file`提供；已解析BP可用`--parsed-bp-file`提供。生成供原`agent_bp_parse`再次预览的BP仍保留原有内容/字段格式，只填缺失字段，不把整份BP改写成营销文案。核对CLI产物与原BP差异后再使用。
@@ -15,7 +15,7 @@
 ## CLI与来源文件
 
 ```bash
-python3 repo/tools/project-enrichment/enrich.py \
+python3 <本skill目录>/tools/project-enrichment/enrich.py \
   --company '法定公司全称' --sources-file /absolute/sources.json \
   --output /absolute/draft.json
 ```
@@ -88,7 +88,7 @@ python3 repo/tools/project-enrichment/enrich.py \
 7. 用户已确认入池（或要求补全该项目）即视为补空值授权：Bot完成第6项审核后，用同一命令追加`--apply`（与`--evidence-file`配合）写同一项目，不再询问；不自动confirm入池。未确认入池的pending不能apply。workflow回读并检查projectId/companyId、已填值及原BP/非空字段不变，异常必须报failed，不能因HTTP200报成功。
 8. 最后必须按当前用户浏览器复用规则打开原项目工商页核验，保存截图；result.json中的browserVerificationRequired=true是待执行检查，不能当网页验收完成。仍缺字段逐项报告：无可靠公开来源、冲突、提取失败或本地字典不匹配；partial不是全部补全。后续再次补全只查仍缺的字段，不自动覆盖已有信息。
 
-本机运行包入口为`runtime/project-enrichment/qtou-profile`；源码入口为`repo/tools/project-enrichment/workflow.py`。运行包内同步本skill和脚本，服务器部署需一并携带并让Bot加载更新的skill；修改此Mac文件不等于已发布服务器或更新所有市场安装实例。
+脚本随插件分发在本skill目录`tools/`下：入口`tools/project-enrichment/workflow.py`（另有`enrich.py`、`profile.py`、`research.py`），MCP客户端在`tools/risk-patrol/mcp_client.py`，连接地址读环境变量`QTOU_MCP_URL`（插件安装时写入）。只用Python标准库，无需另装依赖；Tavily/Grok密钥只经环境变量或用户提供的凭据文件传入。
 
 BP原始逐页资料与逐字段证据可通过 `agent_projects_bp_source(pendingId)` 回读，不能只依赖简短简介。92字段目录包含派生只读字段，返回明确写入边界；竞品说明可写项目文本，外部竞品ID关联未实现时返回needs_mapping，不伪造关联。
 
