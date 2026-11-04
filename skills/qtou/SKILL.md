@@ -64,6 +64,8 @@ description: >-
 
 每项先 `confirmed=false` 内部预览自检（主体、值、出处、字典映射），通过就直接 `confirmed=true` 写入并回读；预览不发给用户等批准。自检不过的项不写，记入缺口。
 
+**字典字段想办法填上（行业、细分领域、轮次、币种、沟通方式等）**：材料里的说法和字典选项不完全一致时，不要直接留空——先看 `agent_projects_bp_schema` / `bp_get` 返回的该字段全部选项，选语义最接近的一项写入（如「智能制造」→「生产|加工|制造」或「高科技」），汇报里注明「按最接近归类：原文 X → 选项 Y」。只有所有选项都明显无关时才留空并写原因。币种材料没写时，服务端会按公司注册资本币种补，不用另传。
+
 主动上网补齐入池所需的全部信息：工商字段、官网、主营业务、简介、荣誉、融资、地址、联系方式等，按 [PROJECT-ENRICHMENT.md](PROJECT-ENRICHMENT.md) 两轮 Tavily 检索并提取正文。天眼查查不到时，confirm 带 `companyFallback`（Tavily + Grok，schemaVersion=1）。
 
 底线（任一不满足，该项不写）：
@@ -78,13 +80,18 @@ description: >-
 
 ## AC MC3：入池确认卡（强制）
 
+规则速查（细节见下文及 PROJECT-ENRICHMENT.md）：
+- **文字确认卡**：客户端不支持卡片组件时，用文字确认卡代替，用户明确回复「确认入池」才 confirm。
+- **askUser 需要你补充**：create_pending / confirm / bp_get 返回的 `askUser` 字段（联系人、推荐人、沟通方式、生产地址等）在确认卡里列成可选的「需要你补充」，不阻塞入池；用户回答后用其原话调 `agent_projects_user_fields`。
+- **BP 没写披露日期照常入池**：document.asOf 与各字段 asOf 留空即可，历史/计划/预测内容标「未注明日期」照常写入；只有当前事实和当前融资需求需要日期。不要用文件导出日期冒充，也不要因此停下来问用户。
+
 轻投网页没有 Agent「待确认」菜单。入池不得引导「去网页确认」。
 
 流程：
 
 1. `agent_bp_parse`（可选）→ 展示草稿字段。
 2. `agent_projects_create_pending` → 得到 `pendingId`（此时仍非正式池）和只给确认卡用的 `confirmToken`（服务端只存其哈希，绑定 pendingId 与当前用户，限时、confirm 成功后作废）。可直接传 `companyName`（法定全称）。
-3. 必须弹聊天确认卡：客户端支持卡片组件（widget）就用组件；不支持（如 Codex CLI、Cursor 等纯文字客户端）就用一段文字确认卡代替，内容与组件卡相同（项目名、pendingId、置信度/轮次行业缺口、公司全称），末尾问「确认把该项目入正式池？」并列出两个选项，然后停下等用户回复。用户明确回复「确认入池」即视为点了确认；回复含糊时再问一次，不得自行推断。选项至少：
+3. 必须弹聊天确认卡：客户端支持卡片组件（widget）就用组件；不支持（如 Codex CLI、Cursor 等纯文字客户端）就用一段文字确认卡代替，内容与组件卡相同（项目名、pendingId、置信度/轮次行业缺口、公司全称），末尾问「确认把该项目入正式池？」并列出两个选项，然后停下等用户回复。将 `askUser` 按标签列为可选的「需要你补充」清单，不阻塞入池；用户回答后，以其逐字原话为 `statement` 调 `agent_projects_user_fields({ pendingId, statement, fields, confirmed:false })` 预览，无问题再 `confirmed:true` 写入并回读，不猜联系人等值。用户明确回复「确认入池」即视为点了确认；回复含糊时再问一次，不得自行推断。选项至少：
    - 「确认入池」→ 用户点了之后，才调 MCP 工具 `agent_projects_confirm({ pendingId, confirmToken })`，token 取自这张卡。没带或带错 token 的 confirm，服务端一律拒绝（`FAILED_PRECONDITION`）。
    - 「取消/驳回」→ 调 MCP 工具 `agent_projects_reject`，或什么都不调；不得 confirm。
    - 连接器里没有 `agent_projects_confirm` / `reject`（例如 stdio 未更新）：先重连；仍没有就如实报「服务端/连接器缺入池确认工具」并停止，不得改用 HTTP 调 confirm。
