@@ -1,6 +1,6 @@
 # 本地巡检执行器
 
-从本机8081 MCP读取配置和名单，额外严格过滤is_after_invest=1。只写草稿，正式风险须员工确认。
+从轻投 MCP（`QTOU_MCP_URL`，默认 74 服务器）读取配置和名单，额外严格过滤is_after_invest=1。只写草稿，正式风险须员工确认。
 
 ```bash
 cd /Users/hesong/Desktop/qtou/repo/tools/risk-patrol

@@ -1,4 +1,4 @@
-"""Local-only qtou JSON-RPC client. Credentials remain in process memory."""
+"""qtou MCP JSON-RPC client. Credentials remain in process memory."""
 import json
 import os
 import subprocess
@@ -7,7 +7,7 @@ import urllib.error
 from urllib.parse import urlsplit
 
 # The plugin installer writes the real connector address to QTOU_MCP_URL.
-DEFAULT_URL = os.environ.get('QTOU_MCP_URL') or 'http://127.0.0.1:8081/api/v1/agent/mcp'
+DEFAULT_URL = os.environ.get('QTOU_MCP_URL') or 'http://113.250.189.74:18081/api/v1/agent/mcp'
 LIB = '/Users/hesong/Desktop/qtou-deploy-2026-10-28/lib.sh'
 
 
@@ -18,6 +18,13 @@ class McpError(RuntimeError):
 
 
 def local_token():
+    env_token = os.environ.get('QTOU_CONNECTOR_TOKEN', '').strip()
+    if env_token:
+        if not env_token.startswith('qtpat_') or '\n' in env_token:
+            raise McpError('AUTH_UNAVAILABLE', 'QTOU_CONNECTOR_TOKEN 格式不对')
+        return env_token
+    if not os.path.exists(LIB):
+        raise McpError('AUTH_UNAVAILABLE', '未设置 QTOU_CONNECTOR_TOKEN')
     try:
         result = subprocess.run(['bash', '-c', 'source "$1" >/dev/null 2>&1; agentkey', '_', LIB],
                                 capture_output=True, text=True, timeout=15)
@@ -32,10 +39,10 @@ def local_token():
 class LocalMcpClient:
     def __init__(self, url=DEFAULT_URL, token_provider=local_token, opener=None):
         parsed = urlsplit(url)
-        if (parsed.scheme != 'http' or parsed.hostname not in ('127.0.0.1', 'localhost')
-                or parsed.port != 8081 or parsed.username or parsed.password
+        if (parsed.scheme not in ('http', 'https') or not parsed.hostname
+                or parsed.username or parsed.password
                 or parsed.path != '/api/v1/agent/mcp' or parsed.query or parsed.fragment):
-            raise McpError('INVALID_ENDPOINT', '只允许本机 8081 MCP 入口')
+            raise McpError('INVALID_ENDPOINT', '只允许轻投 MCP 入口 /api/v1/agent/mcp')
         self.url, self._token_provider = url, token_provider
         self._open = opener or urllib.request.build_opener(NoRedirect()).open
         self._id = 0
@@ -53,9 +60,9 @@ class LocalMcpClient:
                 payload = json.load(response)
         except urllib.error.HTTPError as error:
             error.close()
-            raise McpError('UPSTREAM_UNAVAILABLE', '本机轻投服务不可用或响应无效') from None
+            raise McpError('UPSTREAM_UNAVAILABLE', '轻投服务不可用或响应无效') from None
         except Exception:
-            raise McpError('UPSTREAM_UNAVAILABLE', '本机轻投服务不可用或响应无效') from None
+            raise McpError('UPSTREAM_UNAVAILABLE', '轻投服务不可用或响应无效') from None
         if not isinstance(payload, dict) or payload.get('id') != self._id:
             raise McpError('INVALID_RESPONSE')
         if 'error' in payload:
