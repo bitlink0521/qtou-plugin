@@ -1,7 +1,7 @@
 {
   "name": "qtou",
   "version": "0.3.0",
-  "description": "连接轻投：BP 入池、尽调检索、投后风险预警三场景，账密代签 agent_key。",
+  "description": "连接轻投：BP 入池、尽调检索、投后风险预警三场景，首次使用登录、支持多账号。",
   "author": {
     "name": "Bitilinks",
     "email": "support@handsels.com"
@@ -29,15 +29,15 @@
       "Read",
       "Write"
     ],
-    "websiteURL": "https://qtou.cn",
-    "logo": "./assets/logo.png",
     "defaultPrompt": [
       "把这份 BP 入池",
       "检索某项目的文档写尽调报告",
       "巡检投后项目的风险",
       "切换轻投账号"
     ],
-    "composerIcon": "./assets/logo.png",
-    "brandColor": "#4EAB9A"
+    "brandColor": "#4EAB9A",
+    "websiteURL": "https://qtou.cn",
+    "logo": "./assets/logo.png",
+    "composerIcon": "./assets/logo.png"
   }
 }

@@ -1,14 +1,16 @@
 """qtou MCP JSON-RPC client. Credentials remain in process memory."""
 import json
 import os
-import subprocess
-import urllib.request
+import sys
 import urllib.error
+import urllib.request
+from pathlib import Path
 from urllib.parse import urlsplit
 
-# The plugin installer writes the real connector address to QTOU_MCP_URL.
-DEFAULT_URL = os.environ.get('QTOU_MCP_URL') or 'http://113.250.189.74:18081/api/v1/agent/mcp'
-LIB = '/Users/hesong/Documents/gihub_space/qtou/qtou-deploy-2026-10-28/lib.sh'
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import qtou_shared  # noqa: E402
+
+DEFAULT_URL = qtou_shared.DEFAULT_MCP_URL
 
 
 class McpError(RuntimeError):
@@ -18,29 +20,16 @@ class McpError(RuntimeError):
 
 
 def local_token():
+    """QTOU_CONNECTOR_TOKEN overrides for this process; otherwise the account currently logged in via the plugin."""
     env_token = os.environ.get('QTOU_CONNECTOR_TOKEN', '').strip()
     if env_token:
         if not env_token.startswith('qtpat_') or '\n' in env_token:
             raise McpError('AUTH_UNAVAILABLE', 'QTOU_CONNECTOR_TOKEN 格式不对')
         return env_token
-    try:
-        with open(os.path.expanduser('~/.qtou/connector-token')) as handle:
-            saved = handle.read().strip()
-    except OSError:
-        saved = ''
-    if saved.startswith('qtpat_'):
-        return saved
-    if not os.path.exists(LIB):
+    token = qtou_shared.current_token()
+    if not token:
         raise McpError('AUTH_UNAVAILABLE', '未登录轻投：请先在客户端里登录，或设置 QTOU_CONNECTOR_TOKEN')
-    try:
-        result = subprocess.run(['bash', '-c', 'source "$1" >/dev/null 2>&1; agentkey', '_', LIB],
-                                capture_output=True, text=True, timeout=15)
-    except Exception:
-        raise McpError('AUTH_UNAVAILABLE', '本机凭据获取失败') from None
-    value = result.stdout.strip()
-    if result.returncode or not value.startswith('qtpat_') or '\n' in value:
-        raise McpError('AUTH_UNAVAILABLE', '本机凭据不可用')
-    return value
+    return token
 
 
 class LocalMcpClient:
@@ -51,7 +40,7 @@ class LocalMcpClient:
                 or parsed.path != '/api/v1/agent/mcp' or parsed.query or parsed.fragment):
             raise McpError('INVALID_ENDPOINT', '只允许轻投 MCP 入口 /api/v1/agent/mcp')
         self.url, self._token_provider = url, token_provider
-        self._open = opener or urllib.request.build_opener(NoRedirect()).open
+        self._open = opener or qtou_shared.no_redirect_opener()
         self._id = 0
 
     def call(self, tool, arguments=None):
@@ -86,8 +75,3 @@ class LocalMcpClient:
             allowed = {'NOT_FOUND', 'FORBIDDEN', 'INVALID_ARGUMENT', 'FAILED_PRECONDITION', 'UPSTREAM_UNAVAILABLE'}
             raise McpError(raw if raw in allowed else 'TOOL_ERROR')
         return value
-
-
-class NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, *args, **kwargs):
-        return None

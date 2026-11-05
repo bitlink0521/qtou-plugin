@@ -54,3 +54,8 @@ codex plugin add qtou@qtou-plugin
 ## 鉴权约定
 
 禁止用户手抄 PAT / agent_key 到聊天。优先账密登录 → 签发窄 scope 凭证 → 写入连接器 / 插件变量。只认 Bearer，不读 cookie。
+
+## 维护
+
+- 名称、版本、描述、logo、MCP 地址只改 `plugin-meta.json`，然后运行 `python3 scripts/build_manifests.py` 生成各客户端的清单（Codex、Cursor、Claude/WorkBuddy、Grok）和 MCP 配置；`tools/test_manifests.py` 会检查是否同步。
+- 工具脚本共用 `tools/qtou_shared.py`（HTTP、Tavily、Grok、本机账号存储），新脚本不要再各写一份。

@@ -1,8 +1,10 @@
 """Tavily 采集层。搜索结果是候选证据，不自动判定风险。"""
-import json
 import os
-import urllib.error
-import urllib.request
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import qtou_shared  # noqa: E402
 
 
 class SearchUnavailable(RuntimeError):
@@ -12,35 +14,20 @@ class SearchUnavailable(RuntimeError):
 class TavilyClient:
     def __init__(self, key=None, opener=None):
         self._key = key or os.environ.get('TAVILY_API_KEY', '')
-        self._open = opener or urllib.request.build_opener(NoRedirect()).open
+        self._open = opener or qtou_shared.no_redirect_opener()
 
     def search(self, query):
         if not self._key:
             raise SearchUnavailable('Tavily 运行凭据未配置')
-        payload = json.dumps({'query': query, 'search_depth': 'advanced',
-                              'max_results': 5, 'include_raw_content': False}).encode()
-        req = urllib.request.Request('https://api.tavily.com/search', data=payload,
-                                     headers={'Authorization': 'Bearer ' + self._key,
-                                              'Content-Type': 'application/json'})
+        request = lambda url, payload: qtou_shared.post_json(url, payload, self._key, self._open, timeout=30)
         try:
-            with self._open(req, timeout=30) as response:
-                data = json.load(response)
-        except urllib.error.HTTPError as exc:
+            rows, _ = qtou_shared.tavily_search(request, query)
+        except qtou_shared.HttpFailure as failure:
             # Never include server body, request headers, query or credentials.
-            status = exc.code
-            exc.close()
-            raise SearchUnavailable('Tavily HTTP %d' % status) from None
-        except Exception:
-            raise SearchUnavailable('Tavily 请求失败或响应无效') from None
-        results = data.get('results') if isinstance(data, dict) else None
-        if not isinstance(results, list):
-            raise SearchUnavailable('Tavily 响应缺少结果列表')
-        return [{'url': row['url'], 'title': row.get('title', ''),
-                 'content': row.get('content', ''),
-                 'publishedDate': row.get('published_date')}
-                for row in results if isinstance(row, dict)
-                and isinstance(row.get('url'), str)
-                and row['url'].startswith(('https://', 'http://'))]
+            raise SearchUnavailable('Tavily HTTP %d' % failure.status if failure.status else 'Tavily 请求失败或响应无效') from None
+        except ValueError:
+            raise SearchUnavailable('Tavily 响应缺少结果列表') from None
+        return rows
 
 
 def collect(projects, search):
@@ -62,8 +49,3 @@ def collect(projects, search):
             record.update(status='failed', error='外网检索失败')
         records.append(record)
     return records
-
-
-class NoRedirect(urllib.request.HTTPRedirectHandler):
-    def redirect_request(self, *args, **kwargs):
-        return None
