@@ -1,0 +1,51 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "qtou",
+  "version": "0.3.0",
+  "description": "轻投投资管理系统的 AI 助手。把 BP 发给它即可解析入池：先出确认卡，确认后自动补全工商、团队、融资等字段；按项目名或文档名检索轻投里的资料，写尽调报告初稿；巡检投后项目的财务、舆情与公告，按阈值分级预警，经确认后回写轻投。首次使用时在对话里登录轻投账号，支持多个账号切换。",
+  "author": {
+    "name": "Bitilinks",
+    "email": "support@handsels.com"
+  },
+  "homepage": "https://qtou.cn",
+  "repository": "https://github.com/bitlink0521/qtou-plugin",
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "skills",
+    "qtou",
+    "轻投"
+  ],
+  "mcpServers": "./.mcp.json",
+  "extensions": {
+    "ai.workbuddy": {
+      "schemaVersion": "1.0.0",
+      "display": {
+        "name": "轻投",
+        "name_zh": "轻投",
+        "name_en": "Qtou",
+        "description_zh": "轻投投资管理系统的 AI 助手。把 BP 发给它即可解析入池：先出确认卡，确认后自动补全工商、团队、融资等字段；按项目名或文档名检索轻投里的资料，写尽调报告初稿；巡检投后项目的财务、舆情与公告，按阈值分级预警，经确认后回写轻投。首次使用时在对话里登录轻投账号，支持多个账号切换。",
+        "description_en": "AI assistant for the Qtou investment management system: parse a pitch deck and add it to the deal pool after confirmation (with automatic field enrichment), search Qtou documents to draft due-diligence reports, and run post-investment risk patrols with graded alerts written back after confirmation. Sign in with your Qtou account on first use; multiple accounts supported.",
+        "examples_zh": [
+          "把这份 BP 入池",
+          "帮我找一下某项目的商业计划书，写一份尽调报告初稿",
+          "巡检一下投后项目有没有风险",
+          "现在用的是哪个轻投账号？"
+        ],
+        "examples_en": [
+          "Add this pitch deck to the deal pool",
+          "Find a project's business plan and draft a due-diligence report",
+          "Check portfolio companies for risks",
+          "Which Qtou account am I using?"
+        ]
+      },
+      "policy": {
+        "mcpServers": {
+          "qtou": {
+            "timeout": 600000
+          }
+        }
+      }
+    }
+  }
+}
