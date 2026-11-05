@@ -11,4 +11,4 @@
 8. agent_projects_bp_fill默认补空；已填的描述字段仍有遗漏时，可显式mode=append_evidence追加有出处的新段落，原文保留并去重。只允许受限描述字段，身份/工商/金额/状态不可追加或覆盖。禁止把已有字段非空当作信息完整。
 9. agent_projects_bp_get回读logo、团队photo、字段、附件、media；再次执行验证幂等；实际网页确认图片已加载而非错误占位图。完整提取账本记录：已映射、缺证据、冲突、无适用字段。历史BP不代表当前状态。
 
-MCP新增：agent_projects_bp_pages、agent_projects_bp_assets。stdio代理动态透传tools/list与image内容；客户端缓存旧工具表时重连刷新，不得静默跳过图片。仅本机已部署，服务器需同版本API/网页图片接口及共享存储配置。
+MCP新增：agent_projects_bp_pages、agent_projects_bp_assets。stdio代理动态透传tools/list与image内容；客户端缓存旧工具表时重连刷新，不得静默跳过图片。Mac 本机与 74 服务器已部署同版本。

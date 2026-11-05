@@ -88,7 +88,7 @@ python3 <本skill目录>/tools/project-enrichment/enrich.py \
 7. 用户已确认入池（或要求补全该项目）即视为补空值授权：Bot完成第6项审核后，用同一命令追加`--apply`（与`--evidence-file`配合）写同一项目，不再询问；不自动confirm入池。未确认入池的pending不能apply。workflow回读并检查projectId/companyId、已填值及原BP/非空字段不变，异常必须报failed，不能因HTTP200报成功。
 8. 最后必须按当前用户浏览器复用规则打开原项目工商页核验，保存截图；result.json中的browserVerificationRequired=true是待执行检查，不能当网页验收完成。仍缺字段逐项报告：无可靠公开来源、冲突、提取失败或本地字典不匹配；partial不是全部补全。后续再次补全只查仍缺的字段，不自动覆盖已有信息。
 
-脚本随插件分发在本skill目录`tools/`下：入口`tools/project-enrichment/workflow.py`（另有`enrich.py`、`profile.py`、`research.py`），MCP客户端在`tools/risk-patrol/mcp_client.py`，连接地址读环境变量`QTOU_MCP_URL`（插件安装时写入）。只用Python标准库，无需另装依赖；Tavily/Grok密钥只经环境变量或用户提供的凭据文件传入。
+脚本随插件分发在本skill目录`tools/`下：入口`tools/project-enrichment/workflow.py`（另有`enrich.py`、`profile.py`、`research.py`），MCP客户端在`tools/risk-patrol/mcp_client.py`，连接地址读环境变量`QTOU_MCP_URL`（未设置时用 74 服务器地址），凭据读`QTOU_CONNECTOR_TOKEN`。只用Python标准库，无需另装依赖；Tavily/Grok密钥只经环境变量或用户提供的凭据文件传入。
 
 BP原始逐页资料与逐字段证据可通过 `agent_projects_bp_source(pendingId)` 回读，不能只依赖简短简介。92字段目录包含派生只读字段，返回明确写入边界；竞品说明可写项目文本，外部竞品ID关联未实现时返回needs_mapping，不伪造关联。
 

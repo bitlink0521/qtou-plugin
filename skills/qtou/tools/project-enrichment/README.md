@@ -52,7 +52,7 @@ python3 -m unittest discover -s tools/project-enrichment -p 'test_*.py' -v
 
 ## 默认自动补全编排
 
-Bot入池后使用`workflow.py --pending-id ID --output-dir 本轮目录`。本机运行包同等入口`runtime/project-enrichment/qtou-profile`自动加载原运行配置，不打印凭据。服务器需部署更新后的tools和skill，并按服务器实际MCP客户端/地址配置接入；此LocalMcpClient仅连接Mac本地8081。
+Bot入池后使用`workflow.py --pending-id ID --output-dir 本轮目录`。本机运行包同等入口`runtime/project-enrichment/qtou-profile`自动加载原运行配置，不打印凭据。服务器需部署更新后的tools和skill，并按服务器实际MCP客户端/地址配置接入；LocalMcpClient 连接 `QTOU_MCP_URL`（默认 `http://113.250.189.74:18081/api/v1/agent/mcp`），凭据读环境变量 `QTOU_CONNECTOR_TOKEN`。
 
 脚本盘点30字段，首轮安排工商公开+官方域、官网、正式披露查询；还有缺口则安排第二轮定向查询。运行时Tavily key存在时自动调用HTTP，没有时返回research_required，Bot须使用已连接插件执行research-plan.json，附实际查询凭证与正文，再用`--sources-file`继续。不要把research_required当成完成，不复制查询时间或用摘要冒充正文。
 
