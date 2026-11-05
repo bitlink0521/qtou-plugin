@@ -1,34 +1,34 @@
 {
   "name": "qtou",
   "version": "0.3.0",
-  "description": "连接轻投：MCP 三场景 Agent 工具，账密代签 agent_key，禁止手填令牌。",
+  "description": "连接轻投：BP 入池、尽调检索、投后风险预警三场景，首次使用登录、支持多账号。",
   "author": {
     "name": "Bitilinks",
     "email": "support@handsels.com"
   },
   "homepage": "https://qtou.cn",
+  "repository": "https://github.com/bitlink0521/qtou-plugin",
+  "license": "MIT",
   "keywords": [
     "qtou",
     "轻投",
     "mcp",
-    "agent",
     "venture",
     "bp",
     "due-diligence"
   ],
   "logo": "assets/logo.png",
-  "license": "MIT",
   "variables": {
     "type": "object",
+    "required": [
+      "QTOU_CONNECTOR_TOKEN"
+    ],
     "properties": {
       "QTOU_CONNECTOR_TOKEN": {
         "type": "string",
         "title": "轻投 Agent Key",
         "description": "Bearer qtpat_…（bot 代登录签发后写入；勿手抄到聊天）"
       }
-    },
-    "required": [
-      "QTOU_CONNECTOR_TOKEN"
-    ]
+    }
   }
 }

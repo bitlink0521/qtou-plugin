@@ -2,6 +2,7 @@
 import os
 from datetime import datetime
 import enrich
+import qtou_shared
 
 GROUPS = {
  'registry': ('工商登记', ('juridicalPerson','foundingTime','registeredCapital','registeredCurrency','currency','state','type','registrationAuthority','sociaCreditCode','registeredAddress','province','cityValue')),
@@ -47,22 +48,20 @@ def collect(plan_value, previous=None, request=enrich.request_json):
  if not key:raise enrich.EnrichmentError('TAVILY_PLUGIN_REQUIRED','使用已连接Tavily插件完成research-plan.json后提供sources-file；无需聊天密钥')
  bundle=previous or {'companyName':plan_value['companyName'],'queries':[],'sources':[],'extractions':[]}
  seen={r['url'] for r in bundle['sources']}
+ call=lambda url,payload:request(url,payload,key,'TAVILY')
  for q in plan_value['queries']:
   stamp=enrich.now()
   try:
-   params={'query':q['query'],'search_depth':'advanced','max_results':5}
-   if q['include_domains']:params['include_domains']=q['include_domains']
-   result=request('https://api.tavily.com/search',params,key,'TAVILY')
-   if not isinstance(result.get('results'),list):raise enrich.EnrichmentError('TAVILY_RESPONSE','搜索响应缺少results')
-   urls=list(dict.fromkeys(r['url'] for r in result['results'] if enrich.public_url(r.get('url'))))
-   bundle['queries'].append({**q,'searchedAt':stamp,'source':'tavily_http','status':'success','hits':len(result['results']),'urls':urls})
+   try:rows,hits=qtou_shared.tavily_search(call,q['query'],q['include_domains'])
+   except ValueError:raise enrich.EnrichmentError('TAVILY_RESPONSE','搜索响应缺少results') from None
+   urls=list(dict.fromkeys(r['url'] for r in rows))
+   bundle['queries'].append({**q,'searchedAt':stamp,'source':'tavily_http','status':'success','hits':hits,'urls':urls})
    for url in urls:
     if url in seen:continue
     try:
-     extracted=request('https://api.tavily.com/extract',{'urls':[url],'extract_depth':'advanced','format':'text'},key,'TAVILY')
-     rows=[r for r in extracted.get('results',[]) if r.get('url')==url and r.get('raw_content')]
-     if not rows:raise enrich.EnrichmentError('EXTRACT_FAILED','正文提取失败')
-     row=rows[0];bundle['sources'].append({'url':url,'title':row.get('title') or next((r.get('title') for r in result['results'] if r.get('url')==url),'') or url,'content':row['raw_content'],'retrievedAt':enrich.now(),'publishedDate':row.get('published_date')})
+     extracted=qtou_shared.tavily_extract(call,[url])
+     if url not in extracted:raise enrich.EnrichmentError('EXTRACT_FAILED','正文提取失败')
+     row=extracted[url];bundle['sources'].append({'url':url,'title':row.get('title') or next((r['title'] for r in rows if r['url']==url and r['title']),'') or url,'content':row['raw_content'],'retrievedAt':enrich.now(),'publishedDate':row.get('published_date')})
      bundle.setdefault('extractions',[]).append({'url':url,'status':'success','retrievedAt':enrich.now()});seen.add(url)
     except enrich.EnrichmentError as e:bundle.setdefault('extractions',[]).append({'url':url,'status':'failed','code':e.code})
   except enrich.EnrichmentError as e:bundle['queries'].append({**q,'searchedAt':stamp,'source':'tavily_http','status':'failed','code':e.code})

@@ -26,8 +26,7 @@ def main():
   'companyProfile、primaryBusiness、businessModel均用单一连续短句事实，不做投资评价。'
   '不因新三板挂牌声称A股上市，不因存续推测公司性质，不因认证标签猜字典ID；有资质但有效期不明则留unknown。'
   '不要从第三方网站页脚采集网站运营商的联系方式充当目标公司的联系方式。必须对schema枚举的全部字段逐项输出，不能遗漏，没找到也输出unknown。登记机关优先查工商正文，主营业务、商业模式、公司简介查正式披露和官网；荣誉保留实际披露日期。不采AI生成分析段作为事实，不假设每家公司都有半年报或获奖记录。value保留原文逗号和括号。')
-  response=enrich.request_json(base+'/chat/completions',{'model':model,'messages':[{'role':'system','content':instructions},{'role':'user','content':json.dumps({'companyName':a.company,'publicSources':sources},ensure_ascii=False)}],'response_format':{'type':'json_schema','json_schema':{'name':'profile_fields','strict':True,'schema':enrich.output_schema()}},'max_tokens':8000},key,'GROK')
-  proposal=json.loads(response['choices'][0]['message']['content'])
+  proposal,response=enrich.grok_json((key,base,model),instructions,{'companyName':a.company,'publicSources':sources},'profile_fields',enrich.output_schema(),8000)
   if proposal.get('companyName')!=a.company or proposal.get('entityMatched') is not True:raise enrich.EnrichmentError('ENTITY','公司主体未匹配')
   out={'schemaVersion':1,'companyName':a.company,'provider':{'requestedModel':model,'responseModel':response.get('model')},'modelProposal':proposal,'sources':sources,'searchReceipts':bundle['queries']}
   enrich.save(a.output,out);print(json.dumps({'status':'review_required','fields':len(proposal['fields']),'output':str(a.output),'businessWrites':0}))

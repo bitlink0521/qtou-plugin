@@ -28,11 +28,13 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-MCP_URL = os.environ.get('QTOU_MCP_URL') or 'http://113.250.189.74:18081/api/v1/agent/mcp'
+import qtou_shared
+from qtou_shared import MIGRATED_ACCOUNT_NAME, parse_mcp_body, write_private
+
+MCP_URL = qtou_shared.DEFAULT_MCP_URL
 API_BASE = MCP_URL.rsplit('/mcp', 1)[0]
-TOKEN_PATH = os.path.expanduser('~/.qtou/connector-token')
-ACCOUNTS_PATH = os.path.expanduser('~/.qtou/accounts.json')
-MIGRATED_ACCOUNT_NAME = '已保存账号'
+TOKEN_PATH = qtou_shared.TOKEN_PATH
+ACCOUNTS_PATH = qtou_shared.ACCOUNTS_PATH
 AUTH_ERROR_CODE = 10007
 MAX_LOGIN_ATTEMPTS = 3
 FORM_TIMEOUT_SECONDS = 600
@@ -70,55 +72,16 @@ def log(message):
     sys.stderr.flush()
 
 
-def write_private(path, text):
-    os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, 'w') as handle:
-        handle.write(text)
-
-
-def read_legacy_token():
-    try:
-        with open(TOKEN_PATH) as handle:
-            token = handle.read().strip()
-    except OSError:
-        return ''
-    return token if token.startswith('qtpat_') else ''
-
-
 def load_accounts():
-    try:
-        with open(ACCOUNTS_PATH) as handle:
-            data = json.load(handle)
-    except (OSError, ValueError):
-        legacy = read_legacy_token()
-        if not legacy:
-            return {'current': None, 'accounts': {}}
-        data = {'current': MIGRATED_ACCOUNT_NAME,
-                'accounts': {MIGRATED_ACCOUNT_NAME: {'key': legacy, 'keyId': None, 'savedAt': None}}}
-        store_accounts(data)
-    data.setdefault('accounts', {})
-    if data.get('current') not in data['accounts']:
-        data['current'] = next(iter(data['accounts']), None)
-    return data
+    return qtou_shared.load_accounts(ACCOUNTS_PATH, TOKEN_PATH)
 
 
 def store_accounts(data):
-    write_private(ACCOUNTS_PATH, json.dumps(data, ensure_ascii=False, indent=2))
-    current = data['accounts'].get(data.get('current') or '')
-    if current:
-        write_private(TOKEN_PATH, current['key'])
-    elif os.path.exists(TOKEN_PATH):
-        os.remove(TOKEN_PATH)
+    qtou_shared.store_accounts(data, ACCOUNTS_PATH, TOKEN_PATH)
 
 
 def read_token():
-    data = load_accounts()
-    account = data['accounts'].get(data.get('current') or '')
-    if account:
-        return account['key']
-    env_token = os.environ.get('QTOU_CONNECTOR_TOKEN', '').strip()
-    return env_token if env_token.startswith('qtpat_') else ''
+    return qtou_shared.current_token(ACCOUNTS_PATH, TOKEN_PATH)
 
 
 def save_account(username, key, key_id):
@@ -267,16 +230,7 @@ def post(message, token):
             session['id'] = session_id
         content_type = response.headers.get('Content-Type', '')
         raw = response.read().decode('utf-8', 'replace')
-    return status, parse_body(raw, content_type)
-
-
-def parse_body(raw, content_type):
-    if not raw.strip():
-        return []
-    if 'event-stream' in content_type:
-        return [json.loads(line[5:]) for line in raw.splitlines() if line.startswith('data:') and line[5:].strip()]
-    body = json.loads(raw)
-    return body if isinstance(body, list) else [body]
+    return status, parse_mcp_body(raw, content_type)
 
 
 def is_auth_failure(status, replies):

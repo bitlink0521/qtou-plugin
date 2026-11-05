@@ -1,0 +1,24 @@
+{
+  "name": "qtou",
+  "version": "0.3.0",
+  "marketplace": "qtou-plugin",
+  "description": "连接轻投：BP 入池、尽调检索、投后风险预警三场景，首次使用登录、支持多账号。",
+  "author": {"name": "Bitilinks", "email": "support@handsels.com"},
+  "homepage": "https://qtou.cn",
+  "repository": "https://github.com/bitlink0521/qtou-plugin",
+  "license": "MIT",
+  "keywords": ["qtou", "轻投", "mcp", "venture", "bp", "due-diligence"],
+  "logo": "assets/logo.png",
+  "mcpUrl": "http://113.250.189.74:18081/api/v1/agent/mcp",
+  "proxy": "tools/qtou_mcp_proxy.py",
+  "interface": {
+    "displayName": "轻投",
+    "shortDescription": "BP 入池、尽调检索、投后风险预警",
+    "longDescription": "连接轻投 Agent API：解析 BP 并入池（确认卡后写入、自动补全字段），检索项目文档写尽调报告，按阈值和外网信号做投后风险预警（确认后回写）。",
+    "developerName": "Bitilinks",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": ["把这份 BP 入池", "检索某项目的文档写尽调报告", "巡检投后项目的风险", "切换轻投账号"],
+    "brandColor": "#4EAB9A"
+  }
+}
