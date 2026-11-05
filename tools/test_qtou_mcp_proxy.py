@@ -207,6 +207,13 @@ class ProxyTests(unittest.TestCase):
         listed, _ = call('qtou_account_list')
         self.assertEqual(listed['current'], proxy.MIGRATED_ACCOUNT_NAME)
 
+    def test_env_token_is_used_when_no_account_saved(self):
+        with mock.patch.dict(os.environ, {'QTOU_CONNECTOR_TOKEN': key_for('env')}):
+            self.assertEqual(proxy.read_token(), key_for('env'))
+        self.login_as('u1')
+        with mock.patch.dict(os.environ, {'QTOU_CONNECTOR_TOKEN': key_for('env')}):
+            self.assertEqual(proxy.read_token(), key_for('u1'))
+
     def test_initialize_without_key_answers_locally(self):
         emitted = []
         message = {'jsonrpc': '2.0', 'id': 0, 'method': 'initialize',

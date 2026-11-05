@@ -1,0 +1,21 @@
+{
+  "name": "qtou",
+  "version": "0.3.0",
+  "description": "连接轻投：BP 入池、尽调检索、投后风险预警三场景，账密代签 agent_key。",
+  "author": {
+    "name": "Bitilinks",
+    "email": "support@handsels.com"
+  },
+  "homepage": "https://qtou.cn",
+  "repository": "https://github.com/bitlink0521/qtou-plugin",
+  "license": "MIT",
+  "keywords": [
+    "qtou",
+    "轻投",
+    "mcp",
+    "venture",
+    "bp",
+    "due-diligence"
+  ],
+  "logo": "assets/logo.png"
+}
