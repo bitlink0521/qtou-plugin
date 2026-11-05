@@ -2,7 +2,9 @@
   "mcpServers": {
     "qtou": {
       "command": "python3",
-      "args": ["./skills/qtou/tools/qtou_mcp_proxy.py"],
+      "args": [
+        "./tools/qtou_mcp_proxy.py"
+      ],
       "cwd": ".",
       "startup_timeout_sec": 300,
       "tool_timeout_sec": 600

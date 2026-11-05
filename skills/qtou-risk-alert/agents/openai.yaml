@@ -1,0 +1,6 @@
+interface:
+  display_name: "轻投：投后风险预警"
+  short_description: "巡检投后项目，分级预警并确认回写"
+  icon_small: "./assets/icon.png"
+  icon_large: "./assets/icon.png"
+  default_prompt: "巡检一下投后项目有没有风险"

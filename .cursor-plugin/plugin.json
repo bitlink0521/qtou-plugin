@@ -16,7 +16,7 @@
     "bp",
     "due-diligence"
   ],
-  "logo": "assets/logo.svg",
+  "logo": "assets/logo.png",
   "license": "MIT",
   "variables": {
     "type": "object",

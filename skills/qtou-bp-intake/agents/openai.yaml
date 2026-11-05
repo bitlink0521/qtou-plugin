@@ -1,0 +1,6 @@
+interface:
+  display_name: "轻投：BP 入池"
+  short_description: "解析 BP，确认后入池并补全字段"
+  icon_small: "./assets/icon.png"
+  icon_large: "./assets/icon.png"
+  default_prompt: "把这份 BP 入池"

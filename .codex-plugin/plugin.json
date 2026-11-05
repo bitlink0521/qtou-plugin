@@ -9,7 +9,14 @@
   "homepage": "https://qtou.cn",
   "repository": "https://github.com/bitlink0521/qtou-plugin",
   "license": "MIT",
-  "keywords": ["qtou", "轻投", "mcp", "venture", "bp", "due-diligence"],
+  "keywords": [
+    "qtou",
+    "轻投",
+    "mcp",
+    "venture",
+    "bp",
+    "due-diligence"
+  ],
   "skills": "./skills/",
   "mcpServers": "./.codex-mcp.json",
   "interface": {
@@ -18,13 +25,19 @@
     "longDescription": "连接轻投 Agent API：解析 BP 并入池（确认卡后写入、自动补全字段），检索项目文档写尽调报告，按阈值和外网信号做投后风险预警（确认后回写）。",
     "developerName": "Bitilinks",
     "category": "Productivity",
-    "capabilities": ["Read", "Write"],
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
     "websiteURL": "https://qtou.cn",
-    "logo": "./assets/logo.svg",
+    "logo": "./assets/logo.png",
     "defaultPrompt": [
       "把这份 BP 入池",
       "检索某项目的文档写尽调报告",
-      "巡检投后项目的风险"
-    ]
+      "巡检投后项目的风险",
+      "切换轻投账号"
+    ],
+    "composerIcon": "./assets/logo.png",
+    "brandColor": "#4EAB9A"
   }
 }
