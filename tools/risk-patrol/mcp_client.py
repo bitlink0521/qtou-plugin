@@ -23,8 +23,15 @@ def local_token():
         if not env_token.startswith('qtpat_') or '\n' in env_token:
             raise McpError('AUTH_UNAVAILABLE', 'QTOU_CONNECTOR_TOKEN 格式不对')
         return env_token
+    try:
+        with open(os.path.expanduser('~/.qtou/connector-token')) as handle:
+            saved = handle.read().strip()
+    except OSError:
+        saved = ''
+    if saved.startswith('qtpat_'):
+        return saved
     if not os.path.exists(LIB):
-        raise McpError('AUTH_UNAVAILABLE', '未设置 QTOU_CONNECTOR_TOKEN')
+        raise McpError('AUTH_UNAVAILABLE', '未登录轻投：请先在客户端里登录，或设置 QTOU_CONNECTOR_TOKEN')
     try:
         result = subprocess.run(['bash', '-c', 'source "$1" >/dev/null 2>&1; agentkey', '_', LIB],
                                 capture_output=True, text=True, timeout=15)

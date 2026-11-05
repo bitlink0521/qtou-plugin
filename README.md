@@ -38,12 +38,16 @@ codex plugin marketplace add bitlink0521/qtou-plugin
 codex plugin add qtou@qtou-plugin
 ```
 
-第一次用轻投时 Codex 会弹出登录表单，填轻投用户名和密码即可（表单内容只交给插件，不进聊天）。登录信息保存在本机 `~/.qtou/connector-token`，以后直接用；登录失效会再弹一次。需要本机有 `python3`。以后更新插件：`codex plugin marketplace upgrade qtou-plugin`。
+第一次用轻投时 Codex 会弹出登录表单，填轻投用户名和密码即可（表单内容只交给插件，不进聊天）。登录信息保存在本机 `~/.qtou/`，以后直接用；登录失效会再弹一次。支持多个账号：在 Codex 里说「添加轻投账号」「切换到 xx 账号」「现在用的哪个轻投账号」「退出轻投账号」即可。需要本机有 `python3`。以后更新插件：`codex plugin marketplace upgrade qtou-plugin`。
 
 ## 包含
 
-- **Logo**：`assets/logo.svg`
-- **Skill**：`skills/qtou`（连轻投、三场景 demo；含代签 agent_key；入池 `agent_projects_confirm`/`reject`；确认入池后自动补全，见 `PROJECT-ENRICHMENT.md`、`BP-VISUALS.md`；写尽调报告先学系统里已有报告或用户模板，没有再按 `DD-REPORT-WRITING.md`）
+- **Logo**：`assets/logo.png`（轻投标志）
+- **技能（4 个）**：
+  - `qtou-connect`：连接、登录、多账号（添加/切换/退出）、工具清单与通用规则
+  - `qtou-bp-intake`：BP 入池，确认卡后自动补全字段（含 `PROJECT-ENRICHMENT.md`、`BP-VISUALS.md`）
+  - `qtou-dd-report`：检索文档写尽调报告初稿（含 `DD-REPORT-WRITING.md`）
+  - `qtou-risk-alert`：投后风险预警，员工确认后回写
 - **MCP**：`mcp.json`（Cursor）/ `.codex-mcp.json`（Codex，经 `qtou_mcp_proxy.py` 自动登录）→ 连接器名 **qtou**（随插件生效，不必手填 URL）
 - **变量**：`QTOU_CONNECTOR_TOKEN`（Bearer `qtpat_…`，由 bot 写入插件变量；勿贴到聊天）
 
