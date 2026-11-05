@@ -22,7 +22,7 @@ description: >-
 | URL | `<QTOU_MCP_URL>`（由 G02 的 qtou-login 安装时写入实际地址；正式域名部署时再定） |
 | 传输 | Streamable HTTP |
 | 鉴权 | `Authorization: Bearer <agent_key>` |
-| 连接器名 | `轻投` |
+| 连接器名 | `qtou`（Grok 上手工添加的可能叫 `轻投`，二者等价） |
 | 插件变量 | `QTOU_CONNECTOR_TOKEN` |
 
 只认 Bearer `agent_key`（由 `POST /v1/agent/auth/login` 签发），不读 cookie。无效/吊销 → 401（或业务码 `10007`）。
@@ -40,6 +40,7 @@ description: >-
 1. 已连且冒烟通则结束。
 2. 未装或 401：弹表单收轻投账密。
 3. 代签 → 写入变量 → 冒烟只读工具。
+4. Codex：插件的 `qtou` 连接由 `tools/qtou_mcp_proxy.py` 启动。没有 key 或 key 失效时，它自己请 Codex 弹出登录表单（不支持表单的客户端改用 macOS 对话框），签发后存 `~/.qtou/connector-token`，之后自动复用。表单内容只回给启动器，不进聊天；不要在聊天里要账密。若工具返回「未登录轻投：已取消登录」，告诉用户再发一次请求、在表单里登录即可。
 
 ## 工具最小集（13 个）
 
