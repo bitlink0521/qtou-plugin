@@ -21,6 +21,7 @@ description: >-
    - 读正文返回 `isError` 且 `error.code=FAILED_PRECONDITION`（本地无实体文件）时，记为「未读：无实体文件」（交付消息里说明），其余文档照常处理。
    - 0 命中：如实说没找到，请用户换关键词；不得编造文档。
 2. **读正文**：对确认属于该项目、`readable=true` 的每份文档调 `agent_documents_content({ fileId, maxChars })`。
+   - **扫描件看图读**：`textStatus=no_text_layer`（扫描件或图片，没有文字层）的 PDF / 图片，不算「不可读」：调 `agent_documents_pages({ fileId, pages: [n] })` 按页取页面图片（每次 1–2 页，从第 1 页起，按返回的 `pageCount` 读完需要的页），直接看图读取。看图读到的文字、数字逐字照抄，看不清的写「看不清」，不猜；工作底稿记下页码（如「工商档案 p3」）。Word / PPT 等非 PDF 文件没有页面图片，仍按不可读处理并说明原因。
    - 被拒（跨租户 / 无权限）或不可读：记下未读及原因（交付消息里说明），不得绕道读文件。
 3. **定写法（写前三步，强制，见 [DD-REPORT-WRITING.md](DD-REPORT-WRITING.md) 第 0 节）**：
    ① 先跨项目搜系统里已有的报告：`agent_documents_search` 搜「尽调报告 / 投资建议书 / 尽职调查 / 投决报告」等（不带 `projectId`；这是找范本，`tied` 并列不必让用户确认项目），挑 1–3 份读全文，学结构、用词和排版，以它为准；
