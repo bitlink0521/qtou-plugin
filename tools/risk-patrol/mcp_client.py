@@ -32,6 +32,25 @@ def local_token():
     return token
 
 
+MAX_PAGES = 200
+
+
+def all_items(client, tool, arguments=None):
+    """Every item of a list tool, following page/hasMore; also accepts unpaged list or {items} replies."""
+    items, page = [], 1
+    while page <= MAX_PAGES:
+        reply = client.call(tool, dict(arguments or {}, page=page, pageSize=50))
+        if isinstance(reply, list):
+            return reply
+        if not isinstance(reply, dict) or not isinstance(reply.get('items'), list):
+            raise McpError('INVALID_RESPONSE')
+        items.extend(reply['items'])
+        if not reply.get('hasMore'):
+            return items
+        page += 1
+    raise McpError('INVALID_RESPONSE', '列表页数超出上限')
+
+
 class LocalMcpClient:
     def __init__(self, url=DEFAULT_URL, token_provider=local_token, opener=None):
         parsed = urlsplit(url)

@@ -30,4 +30,18 @@ class ClientTests(unittest.TestCase):
   def op(req,timeout):return io.BytesIO(json.dumps({'id':1,'result':{'isError':True,'structuredContent':{'error':{'code':'NOT_FOUND','message':'secret'}}}}).encode())
   with self.assertRaises(McpError) as c:LocalMcpClient(token_provider=lambda:'secret',opener=op).call('x')
   self.assertEqual(c.exception.code,'NOT_FOUND');self.assertNotIn('secret',str(c.exception))
+class PagingTests(unittest.TestCase):
+ def test_all_items_follows_has_more(self):
+  import mcp_client
+  class Pager:
+   calls=[]
+   def call(self,tool,args):
+    self.calls.append(args['page']);start=(args['page']-1)*2
+    return {'items':list(range(5))[start:start+2],'hasMore':start+2<5}
+  p=Pager();self.assertEqual(mcp_client.all_items(p,'agent_portfolio_list',{'afterInvestOnly':True}),[0,1,2,3,4]);self.assertEqual(p.calls,[1,2,3])
+ def test_all_items_accepts_unpaged_list(self):
+  import mcp_client
+  class Old:
+   def call(self,tool,args):return [{'id':'a'}]
+  self.assertEqual(mcp_client.all_items(Old(),'x'),[{'id':'a'}])
 if __name__=='__main__':unittest.main()

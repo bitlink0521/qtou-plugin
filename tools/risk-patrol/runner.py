@@ -6,7 +6,7 @@ from datetime import datetime
 import json
 from pathlib import Path
 from zoneinfo import ZoneInfo
-from mcp_client import LocalMcpClient
+from mcp_client import LocalMcpClient, all_items
 from tavily_client import TavilyClient, collect
 from schedule import SlotStore, latest_slot
 from patrol_state import PatrolState
@@ -48,8 +48,7 @@ def plugin_coverage(client, evidence, events, slot, now):
         raise ValueError('插件采集凭证格式无效')
     projects = validate_candidates({'schemaVersion':1,'projects':evidence['projects']})
     receipts = evidence['receipts']
-    rows = client.call('agent_portfolio_list', {'afterInvestOnly':True})
-    rows = rows.get('items',[]) if isinstance(rows,dict) else rows
+    rows = all_items(client, 'agent_portfolio_list', {'afterInvestOnly': True})
     ids = {p.get('projectId') or p.get('id') for p in eligible(rows)}
     if set(projects) != ids or not isinstance(receipts,dict) or set(receipts) != ids:
         raise ValueError('插件采集未完整覆盖投后名单')
@@ -126,10 +125,7 @@ def execute(client, search, events=None, candidates=None, skip_test_ids=None, he
         candidates = validate_candidates(candidates)
     started = timestamp()
     config = client.call('risk_config_get')
-    portfolio = client.call('agent_portfolio_list', {'afterInvestOnly': True})
-    rows = portfolio.get('items', []) if isinstance(portfolio, dict) else portfolio
-    if not isinstance(rows, list):
-        raise ValueError('投后名单响应无效')
+    rows = all_items(client, 'agent_portfolio_list', {'afterInvestOnly': True})
     projects = eligible(rows)
     ids = {p.get('projectId') or p.get('id') for p in projects}
     run = client.call('risk_run_record', {'runType': 'patrol', 'startedAt': started,
