@@ -43,9 +43,9 @@ description: >-
 
 **禁止直调 HTTP（强制）**：除上面「签发」这一步把账密换成 key、并直接写入 `QTOU_CONNECTOR_TOKEN` 以外，模型不得自己读取 `agent_key` / `QTOU_CONNECTOR_TOKEN`（不读插件变量、配置文件、环境变量、钥匙串），不得拿它用 curl / 脚本 / fetch 直接调 `/api/v1/agent/**` 任何接口（含 confirm、reject、写入类接口）。一切业务操作只走 MCP 工具。不得用 curl、脚本等自行调用 MCP 端点或 REST 接口，只能通过已配置的连接器工具。MCP 连不上或缺工具时，如实报错并停止，不改用 HTTP、不直连库。服务端审计会把不经 MCP 的直调请求单独标出（`direct_http=true`）。唯一例外是 `agent_projects_bp_upload_url` 发回的一次性上传地址（见 `qtou-bp-intake` 技能「入池后自动补全」），它不带也不收 key。
 
-## 工具最小集（13 个）
+## 工具最小集（14 个）
 
-`agent_health` · `agent_bp_parse` · `agent_projects_create_pending` · `agent_projects_get` · `agent_projects_confirm` · `agent_projects_reject` · `agent_documents_search` · `agent_documents_content` · `agent_portfolio_list` · `agent_portfolio_quarterly` · `agent_risk_alerts_list` · `agent_risk_alerts_create` · `agent_dicts`
+`agent_health` · `agent_bp_parse` · `agent_projects_create_pending` · `agent_projects_get` · `agent_projects_confirm` · `agent_projects_reject` · `agent_documents_search` · `agent_documents_content` · `agent_documents_pages` · `agent_portfolio_list` · `agent_portfolio_quarterly` · `agent_risk_alerts_list` · `agent_risk_alerts_create` · `agent_dicts`
 
 入池补全另用：`agent_projects_bp_schema` · `agent_projects_bp_get` · `agent_projects_bp_fill` · `agent_projects_bp_upload_url` · `agent_projects_bp_attach` · `agent_projects_bp_pages` · `agent_projects_bp_assets` · `agent_projects_bp_source` · `agent_projects_profile_get` · `agent_projects_profile_fill`（见 `qtou-bp-intake` 技能）。
 
