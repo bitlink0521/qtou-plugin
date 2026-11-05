@@ -40,7 +40,7 @@ description: >-
 1. 已连且冒烟通则结束。
 2. 未装或 401：弹表单收轻投账密。
 3. 代签 → 写入变量 → 冒烟只读工具。
-4. Codex（没有表单组件）：不要在聊天里要账密。直接运行本 skill 目录下的 `tools/qtou-login.sh --gui`（需联网、写 `~/.qtou`，按沙箱提示申请在沙箱外执行）。脚本弹 macOS 对话框让用户填用户名和密码，签发 key 写入 `~/.qtou/connector-token` 并设置 `QTOU_CONNECTOR_TOKEN`；输出只有 keyId，不含 key。成功后告诉用户：退出并重新打开 Codex（命令行则新开终端），然后再说一次需求即可；Codex 只在启动时读取这个变量，本会话里冒烟会失败，属正常。
+4. Codex：插件的 `qtou` 连接由 `tools/qtou_mcp_proxy.py` 启动，没有 key 或 key 失效时它自己弹 macOS 登录框，签发后存 `~/.qtou/connector-token`，之后自动复用。不要在聊天里要账密。若工具返回「未登录轻投：已取消登录」，告诉用户再发一次请求、在弹出的框里登录即可。
 
 ## 工具最小集（13 个）
 

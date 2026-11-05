@@ -11,7 +11,7 @@
   "license": "MIT",
   "keywords": ["qtou", "轻投", "mcp", "venture", "bp", "due-diligence"],
   "skills": "./skills/",
-  "mcpServers": "./mcp.json",
+  "mcpServers": "./.codex-mcp.json",
   "interface": {
     "displayName": "轻投",
     "shortDescription": "BP 入池、尽调检索、投后风险预警",
