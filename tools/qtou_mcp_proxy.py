@@ -7,7 +7,8 @@ the user is asked for the qtou username/password, a key is signed and saved, and
 so the first use logs in and later uses just work.
 
 Credentials are collected with an MCP form (elicitation/create) when the client supports it; the answer
-goes back to this bridge only, never to the model or the chat. Otherwise a macOS dialog is used.
+goes back to this bridge only, never to the model or the chat. Otherwise a macOS dialog is used. A client that
+signs the key itself (e.g. Grok Bot's secure form) can pass it in QTOU_CONNECTOR_TOKEN instead.
 
 Accounts live in ~/.qtou/accounts.json (mode 600); the current account's key is mirrored to
 ~/.qtou/connector-token for the other plugin tools. Four local tools manage them:
@@ -114,7 +115,10 @@ def store_accounts(data):
 def read_token():
     data = load_accounts()
     account = data['accounts'].get(data.get('current') or '')
-    return account['key'] if account else ''
+    if account:
+        return account['key']
+    env_token = os.environ.get('QTOU_CONNECTOR_TOKEN', '').strip()
+    return env_token if env_token.startswith('qtpat_') else ''
 
 
 def save_account(username, key, key_id):
