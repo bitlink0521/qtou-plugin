@@ -34,22 +34,17 @@
 ## Codex 安装
 
 ```bash
-# 1. 添加插件市场并安装（以后更新：codex plugin marketplace upgrade qtou-plugin）
 codex plugin marketplace add bitlink0521/qtou-plugin
 codex plugin add qtou@qtou-plugin
-
-# 2. 用自己的轻投账号签发连接 key（只存 ~/.qtou/connector-token，不显示 key）
-curl -fsSL https://raw.githubusercontent.com/bitlink0521/qtou-plugin/main/scripts/qtou-login.sh -o /tmp/qtou-login.sh && bash /tmp/qtou-login.sh
 ```
 
-签发后新开终端即可用命令行 Codex；Codex 桌面版需重启一次。电脑重启后桌面版要先在终端执行
-`launchctl setenv QTOU_CONNECTOR_TOKEN "$(cat ~/.qtou/connector-token)"` 再打开 Codex。第一次调用轻投工具时按提示允许。
+装好后在 Codex 里说「连接轻投」。Codex 会弹出 macOS 对话框，填轻投用户名和密码即可（密码不经过聊天）；签发完成后按提示重启一次 Codex。以后更新插件：`codex plugin marketplace upgrade qtou-plugin`。
 
 ## 包含
 
 - **Logo**：`assets/logo.svg`
 - **Skill**：`skills/qtou`（连轻投、三场景 demo；含代签 agent_key；入池 `agent_projects_confirm`/`reject`；确认入池后自动补全，见 `PROJECT-ENRICHMENT.md`、`BP-VISUALS.md`；写尽调报告先学系统里已有报告或用户模板，没有再按 `DD-REPORT-WRITING.md`）
-- **MCP**：`mcp.json` → 连接器名 **轻投**（随插件生效，不必手填 URL）
+- **MCP**：`mcp.json` → 连接器名 **qtou**，Cursor 与 Codex 共用（随插件生效，不必手填 URL）
 - **变量**：`QTOU_CONNECTOR_TOKEN`（Bearer `qtpat_…`，由 bot 写入插件变量；勿贴到聊天）
 
 ## 鉴权约定
