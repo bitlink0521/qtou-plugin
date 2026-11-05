@@ -12,7 +12,7 @@ description: >-
 
 触发：用户要「投后巡检 / 风险预警 / 看看投后项目有没有风险」。默认只读；回写必须逐条确认。
 
-1. **取名单**：`agent_portfolio_list({ afterInvestOnly: true })`（可加 `q` 过滤）。记下每家的 projectId、项目名、公司全称、法人、成立日期、行业、投资日期，后面外网查询用全称消歧。同名项目（项目名相同、公司全称/法人不同）分开处理，不得合并。
+1. **取名单**：`agent_portfolio_list({ afterInvestOnly: true, pageSize: 50 })`（可加 `q` 过滤）。名单分页返回：`hasMore=true` 时带 `page` 取下一页，直到取完，报告里的企业数以返回的 `total` 为准，不能只看第一页。记下每家的 projectId、项目名、公司全称、法人、成立日期、行业、投资日期，后面外网查询用全称消歧。同名项目（项目名相同、公司全称/法人不同）分开处理，不得合并。
 2. **取季度数据算财务异常**：每家调 `agent_portfolio_quarterly({ projectId })`（可带 `from`/`to`，格式 YYYYQn）。
    - `finance` 每季两行：`type=current` 是本期，`type=samePeriod` 是去年同期，`reportCycleOf` 是所属季度。同比 = current ÷ samePeriod − 1。
    - 只认读回的数，自己算的数写明算式。财务类须 ≥2 季数据（`financeQuarterCount`），不足标「数据不足」，不定级；外网两类照查。
