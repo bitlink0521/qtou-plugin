@@ -22,7 +22,7 @@ description: >-
 | URL | `<QTOU_MCP_URL>`（由 G02 的 qtou-login 安装时写入实际地址；正式域名部署时再定） |
 | 传输 | Streamable HTTP |
 | 鉴权 | `Authorization: Bearer <agent_key>` |
-| 连接器名 | `轻投` |
+| 连接器名 | `qtou`（Grok 上手工添加的可能叫 `轻投`，二者等价） |
 | 插件变量 | `QTOU_CONNECTOR_TOKEN` |
 
 只认 Bearer `agent_key`（由 `POST /v1/agent/auth/login` 签发），不读 cookie。无效/吊销 → 401（或业务码 `10007`）。
