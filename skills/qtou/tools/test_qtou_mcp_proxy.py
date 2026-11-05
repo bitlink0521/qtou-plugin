@@ -62,7 +62,7 @@ class ProxyTests(unittest.TestCase):
         self.dir = tempfile.TemporaryDirectory()
         self.token_patch = mock.patch.object(proxy, 'TOKEN_PATH', os.path.join(self.dir.name, 'qtou', 'connector-token'))
         self.token_patch.start()
-        proxy.session.update(id=None, initialize=None)
+        proxy.session.update(id=None, initialize=None, upstream_ready=False, client_form=False)
         FakeQtou.logins = []
 
     def tearDown(self):
@@ -110,6 +110,48 @@ class ProxyTests(unittest.TestCase):
             proxy.handle({'jsonrpc': '2.0', 'id': 3, 'method': 'tools/list'})
         self.assertEqual(emitted[0]['error']['code'], -32001)
         self.assertEqual(proxy.read_token(), '')
+
+    def test_form_login_answer_goes_to_bridge_only(self):
+        proxy.session['client_form'] = True
+        sent = []
+
+        def client(message):
+            sent.append(message)
+            if message.get('method') == 'elicitation/create':
+                proxy.route({'jsonrpc': '2.0', 'id': message['id'],
+                             'result': {'action': 'accept', 'content': {'username': 'u', 'password': 'right'}}})
+
+        with mock.patch.object(proxy, 'emit', side_effect=client):
+            proxy.handle({'jsonrpc': '2.0', 'id': 5, 'method': 'tools/list'})
+        form = sent[0]
+        self.assertEqual(form['method'], 'elicitation/create')
+        self.assertEqual(set(form['params']['requestedSchema']['required']), {'username', 'password'})
+        self.assertEqual(sent[1]['id'], 5)
+        self.assertNotIn('right', json.dumps(sent[1]))
+        self.assertEqual(proxy.read_token(), GOOD)
+
+    def test_form_decline_cancels(self):
+        proxy.session['client_form'] = True
+        sent = []
+
+        def client(message):
+            sent.append(message)
+            if message.get('method') == 'elicitation/create':
+                proxy.route({'jsonrpc': '2.0', 'id': message['id'], 'result': {'action': 'decline'}})
+
+        with mock.patch.object(proxy, 'emit', side_effect=client):
+            proxy.handle({'jsonrpc': '2.0', 'id': 6, 'method': 'tools/list'})
+        self.assertEqual(sent[-1]['error']['code'], -32001)
+
+    def test_initialize_without_key_answers_locally(self):
+        emitted = []
+        message = {'jsonrpc': '2.0', 'id': 0, 'method': 'initialize',
+                   'params': {'protocolVersion': '2025-06-18', 'capabilities': {'elicitation': {}}}}
+        with mock.patch.object(proxy, 'emit', side_effect=emitted.append):
+            proxy.initialize(message)
+        self.assertEqual(emitted[0]['result']['protocolVersion'], '2025-06-18')
+        self.assertTrue(proxy.session['client_form'])
+        self.assertFalse(proxy.session['upstream_ready'])
 
     def test_notifications_get_no_reply(self):
         proxy.save_token(GOOD)

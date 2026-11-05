@@ -38,7 +38,7 @@ codex plugin marketplace add bitlink0521/qtou-plugin
 codex plugin add qtou@qtou-plugin
 ```
 
-第一次用轻投时会自动弹出 macOS 登录框，填轻投用户名和密码即可（密码不经过聊天）。登录信息保存在本机 `~/.qtou/connector-token`，以后直接用；登录失效会再弹一次。需要本机有 `python3`。以后更新插件：`codex plugin marketplace upgrade qtou-plugin`。
+第一次用轻投时 Codex 会弹出登录表单，填轻投用户名和密码即可（表单内容只交给插件，不进聊天）。登录信息保存在本机 `~/.qtou/connector-token`，以后直接用；登录失效会再弹一次。需要本机有 `python3`。以后更新插件：`codex plugin marketplace upgrade qtou-plugin`。
 
 ## 包含
 

@@ -3,12 +3,16 @@
 
 The client (e.g. Codex) launches this as a stdio MCP server. Every JSON-RPC message is forwarded to
 QTOU_MCP_URL with the connector key from ~/.qtou/connector-token. When the key is missing or rejected,
-a macOS dialog asks for the qtou username/password, a key is signed and saved, and the request is
-retried, so the first use logs in and later uses just work. The password never passes through the chat.
+the user is asked for the qtou username/password, a key is signed and saved, and the request is retried,
+so the first use logs in and later uses just work.
+
+Credentials are collected with an MCP form (elicitation/create) when the client supports it; the answer
+goes back to this bridge only, never to the model or the chat. Otherwise a macOS dialog is used.
 
 `--login` runs the same login flow by hand (terminal prompts when available, dialogs otherwise).
 """
 import getpass
+import itertools
 import json
 import os
 import subprocess
@@ -23,10 +27,13 @@ LOGIN_URL = MCP_URL.rsplit('/mcp', 1)[0] + '/auth/login'
 TOKEN_PATH = os.path.expanduser('~/.qtou/connector-token')
 AUTH_ERROR_CODE = 10007
 MAX_LOGIN_ATTEMPTS = 3
+FORM_TIMEOUT_SECONDS = 600
 
 write_lock = threading.Lock()
 login_lock = threading.Lock()
-session = {'id': None, 'initialize': None}
+session = {'id': None, 'initialize': None, 'upstream_ready': False, 'client_form': False}
+pending_requests = {}
+request_ids = itertools.count(1)
 
 
 class LoginCancelled(Exception):
@@ -54,6 +61,41 @@ def save_token(token):
         handle.write(token)
 
 
+def emit(message):
+    with write_lock:
+        sys.stdout.write(json.dumps(message, ensure_ascii=False) + '\n')
+        sys.stdout.flush()
+
+
+def request_client(method, params):
+    request_id = 'qtou-%d' % next(request_ids)
+    waiter = {'event': threading.Event(), 'reply': None}
+    pending_requests[request_id] = waiter
+    emit({'jsonrpc': '2.0', 'id': request_id, 'method': method, 'params': params})
+    answered = waiter['event'].wait(FORM_TIMEOUT_SECONDS)
+    pending_requests.pop(request_id, None)
+    return waiter['reply'] if answered else None
+
+
+def ask_form(hint):
+    reply = request_client('elicitation/create', {
+        'message': (hint + '\n' if hint else '') + '登录轻投后会自动保存，以后不用再输入。',
+        'requestedSchema': {
+            'type': 'object',
+            'properties': {
+                'username': {'type': 'string', 'title': '轻投用户名'},
+                'password': {'type': 'string', 'title': '轻投密码'},
+            },
+            'required': ['username', 'password'],
+        },
+    })
+    result = (reply or {}).get('result') or {}
+    content = result.get('content') or {}
+    if result.get('action') != 'accept' or not content.get('username') or not content.get('password'):
+        raise LoginCancelled()
+    return content['username'].strip(), content['password']
+
+
 def applescript_quote(text):
     return '"' + text.replace('\\', '\\\\').replace('"', '\\"') + '"'
 
@@ -62,15 +104,13 @@ def ask_dialog(prompt, hidden=False):
     script = ('text returned of (display dialog %s default answer "" %s with title "连接轻投" '
               'buttons {"取消", "登录"} default button "登录" cancel button "取消")'
               % (applescript_quote(prompt), 'with hidden answer' if hidden else ''))
-    result = subprocess.run(['osascript', '-e', script], capture_output=True, text=True)
+    try:
+        result = subprocess.run(['osascript', '-e', script], capture_output=True, text=True)
+    except OSError:
+        raise LoginCancelled()
     if result.returncode != 0:
         raise LoginCancelled()
     return result.stdout.rstrip('\n')
-
-
-def show_dialog(message):
-    script = 'display dialog %s with title "连接轻投" buttons {"好"} default button "好"' % applescript_quote(message)
-    subprocess.run(['osascript', '-e', script], capture_output=True)
 
 
 def ask_credentials(hint, use_terminal):
@@ -78,6 +118,8 @@ def ask_credentials(hint, use_terminal):
         if hint:
             print(hint)
         return input('轻投用户名: ').strip(), getpass.getpass('轻投密码（不显示）: ')
+    if session['client_form']:
+        return ask_form(hint)
     prompt = (hint + '\n\n' if hint else '') + '请输入轻投用户名'
     username = ask_dialog(prompt).strip()
     return username, ask_dialog('请输入轻投密码', hidden=True)
@@ -111,8 +153,6 @@ def login(use_terminal=False, reason=''):
             save_token(key)
             return key
         hint = error + '，请重新输入。'
-    if not use_terminal:
-        show_dialog('多次登录失败，请确认账号后在 Codex 里重试。')
     raise LoginCancelled()
 
 
@@ -160,23 +200,48 @@ def is_auth_failure(status, replies):
     return any(isinstance(reply, dict) and (reply.get('error') or {}).get('code') == AUTH_ERROR_CODE for reply in replies)
 
 
+def initialize_upstream(token):
+    session['id'] = None
+    post(session['initialize'], token)
+    post({'jsonrpc': '2.0', 'method': 'notifications/initialized'}, token)
+    session['upstream_ready'] = True
+
+
 def forward(message):
     token = ensure_token()
+    if session['initialize'] and not session['upstream_ready']:
+        initialize_upstream(token)
     status, replies = post(message, token)
     if is_auth_failure(status, replies):
         token = ensure_token(rejected=token)
-        if session['initialize'] and message.get('method') != 'initialize':
-            session['id'] = None
-            post(session['initialize'], token)
-            post({'jsonrpc': '2.0', 'method': 'notifications/initialized'}, token)
+        if session['initialize']:
+            initialize_upstream(token)
         status, replies = post(message, token)
     return replies
 
 
-def emit(reply):
-    with write_lock:
-        sys.stdout.write(json.dumps(reply, ensure_ascii=False) + '\n')
-        sys.stdout.flush()
+def local_initialize(message):
+    params = message.get('params') or {}
+    return {'jsonrpc': '2.0', 'id': message.get('id'), 'result': {
+        'protocolVersion': params.get('protocolVersion') or '2024-11-05',
+        'capabilities': {'tools': {}},
+        'serverInfo': {'name': 'qtou-agent-mcp', 'version': 'proxy'},
+    }}
+
+
+def initialize(message):
+    """Answer initialize without logging in: forms can only be shown after the handshake completes."""
+    session['initialize'] = message
+    session['client_form'] = 'elicitation' in ((message.get('params') or {}).get('capabilities') or {})
+    token = read_token()
+    if token:
+        status, replies = post(message, token)
+        if not is_auth_failure(status, replies):
+            session['upstream_ready'] = True
+            for reply in replies:
+                emit(reply)
+            return
+    emit(local_initialize(message))
 
 
 def error_reply(message, code, text):
@@ -184,12 +249,12 @@ def error_reply(message, code, text):
 
 
 def handle(message):
-    if message.get('method') == 'initialize':
-        session['initialize'] = message
     try:
+        if message.get('method') == 'notifications/initialized' and not session['upstream_ready']:
+            return
         replies = forward(message)
     except LoginCancelled:
-        replies = [error_reply(message, -32001, '未登录轻投：已取消登录。再次使用轻投时会重新弹出登录框。')]
+        replies = [error_reply(message, -32001, '未登录轻投：已取消登录。再次使用轻投时会重新请你登录。')]
     except Exception as error:
         log('forward failed: %s' % type(error).__name__)
         replies = [error_reply(message, -32002, '轻投服务暂时不可用，请稍后重试')]
@@ -197,6 +262,19 @@ def handle(message):
         return
     for reply in replies:
         emit(reply)
+
+
+def route(message):
+    if 'method' not in message:
+        waiter = pending_requests.get(message.get('id'))
+        if waiter:
+            waiter['reply'] = message
+            waiter['event'].set()
+        return
+    if message['method'] == 'initialize':
+        initialize(message)
+        return
+    threading.Thread(target=handle, args=(message,), daemon=True).start()
 
 
 def serve():
@@ -209,10 +287,8 @@ def serve():
         except ValueError:
             log('ignored a non-JSON line')
             continue
-        if message.get('method') == 'initialize':
-            handle(message)
-        else:
-            threading.Thread(target=handle, args=(message,), daemon=True).start()
+        if isinstance(message, dict):
+            route(message)
 
 
 def main():
