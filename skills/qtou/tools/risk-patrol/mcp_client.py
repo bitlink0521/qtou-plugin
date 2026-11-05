@@ -8,7 +8,7 @@ from urllib.parse import urlsplit
 
 # The plugin installer writes the real connector address to QTOU_MCP_URL.
 DEFAULT_URL = os.environ.get('QTOU_MCP_URL') or 'http://113.250.189.74:18081/api/v1/agent/mcp'
-LIB = '/Users/hesong/Desktop/qtou-deploy-2026-10-28/lib.sh'
+LIB = '/Users/hesong/Documents/gihub_space/qtou/qtou-deploy-2026-10-28/lib.sh'
 
 
 class McpError(RuntimeError):

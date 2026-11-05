@@ -3,7 +3,7 @@
 从轻投 MCP（`QTOU_MCP_URL`，默认 74 服务器）读取配置和名单，额外严格过滤is_after_invest=1。只写草稿，正式风险须员工确认。
 
 ```bash
-cd /Users/hesong/Desktop/qtou/repo/tools/risk-patrol
+cd /Users/hesong/Documents/gihub_space/qtou/repo/tools/risk-patrol
 # 插件已搜的结果用于采集，不需要本地Tavily key
 python3 runner.py --collect-only --candidates-file /绝对路径/candidates.json --output /绝对路径/evidence.json
 # 核实正文、事件日期、S3-C定级以后提交；不重复搜索
@@ -45,4 +45,4 @@ risk_run_record是增量接口：每次调用（包括不带runId的首调）都
 
 逐家health在run finish之前并入details。consecutiveFailedDays/failDays是失败日数，alerted是独立送达状态，不从日数推定。`PatrolState.alerts(tenant)`返回needs_attention/alerted；只有实际送达后调用`acknowledge_failure_alert(tenant, project, day, delivered_at, delivery_reference)`，按项目/自然日持久去重。未送达UI显示待告警。不得在测试样本/自动检测后假ack，测试ack只在独立临时SQLite中验证。
 
-摘要统一用`summary_payload(raw_summary)`裁剪后再`summary_changed`，稳定排序待办，排除动态时间。当前持久库`/Users/hesong/Desktop/qtou/qa/codex-20261029/s2/patrol-real/slot.sqlite`已保存用户可见daily6条QA摘要的真实送达ack；不要每次另建空库导致重复通知。
+摘要统一用`summary_payload(raw_summary)`裁剪后再`summary_changed`，稳定排序待办，排除动态时间。当前持久库`/Users/hesong/Documents/gihub_space/qtou/qa/codex-20261029/s2/patrol-real/slot.sqlite`已保存用户可见daily6条QA摘要的真实送达ack；不要每次另建空库导致重复通知。
