@@ -143,10 +143,11 @@ class VerifierTests(unittest.TestCase):
             self.assertEqual(d['provider'],{'responseModel':'gpt-5.5','verifiedBy':'calling_agent'})
             self.assertIn('introduction',d['missingOnlyPatch'])
 
-    def test_agent_proposal_requires_model_name(self):
+    def test_agent_proposal_without_model_name_is_accepted(self):
         with tempfile.TemporaryDirectory() as directory:
             p=Path(directory);(p/'proposal.json').write_text(json.dumps(proposal()))
             code,status=self.run_main(p,'--proposal-file',str(p/'proposal.json'))
-            self.assertEqual((code,status['code']),(1,'INPUT'))
+            self.assertEqual((code,status['status']),(0,'review_required'))
+            self.assertEqual(json.loads((p/'out.json').read_text())['provider'],{'verifiedBy':'calling_agent'})
 
 if __name__=='__main__':unittest.main()

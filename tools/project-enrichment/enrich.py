@@ -2,7 +2,7 @@
 """Tavily -> model-verified company-profile draft. No business writes or confirmations.
 
 The agent that uses the plugin verifies the sources itself: the first run writes verify-task.json
-(instructions, schema, numbered sources); answer it, then rerun with --proposal-file and --model.
+(instructions, schema, numbered sources); answer it, then rerun with --proposal-file (plus --model when the model name is known).
 --verifier grok hands verification to the Grok API instead (for unattended scripts)."""
 import argparse
 import hashlib
@@ -157,7 +157,7 @@ def add_verifier_arguments(parser):
                         help='agent（默认）：由调用插件的Agent自己核实；grok：改调Grok API（无人值守脚本用）')
     parser.add_argument('--task-output', type=Path, help='核实任务写到哪里；默认与--output同目录的verify-task.json')
     parser.add_argument('--proposal-file', type=Path, help='调用插件的Agent按核实任务产出的JSON')
-    parser.add_argument('--model', help='产出proposal-file所用的实际模型名，原样记入证据')
+    parser.add_argument('--model', help='选填：产出proposal-file所用的实际模型名，原样记入证据；不确定就不传，不要猜')
     parser.add_argument('--grok-credentials-file', type=Path, help='--verifier grok时的凭据文件')
 
 
@@ -174,18 +174,16 @@ def propose(args, company, sources, instructions, schema_name, max_tokens, opene
         save(task_path, {'companyName': company, 'instructions': instructions, 'schema': output_schema(),
                          'publicSources': sources})
         raise ProposalRequired(task_path)
-    model = (args.model or '').strip()
-    if not model:
-        raise EnrichmentError('INPUT', '--proposal-file须同时用--model写明核实所用模型')
     value = json.loads(args.proposal_file.read_text())
     if not isinstance(value, dict) or not isinstance(value.get('fields'), list):
         raise EnrichmentError('PROPOSAL_FORMAT', '核实结果须为符合schema的JSON对象')
-    return value, {'responseModel': model, 'verifiedBy': 'calling_agent'}
+    model = (args.model or '').strip()
+    return value, {**({'responseModel': model} if model else {}), 'verifiedBy': 'calling_agent'}
 
 
 def proposal_required(error):
     return {'status': 'proposal_required', 'task': str(error.task_path), 'businessWrites': 0,
-            'next': '按task里的instructions和schema只依据publicSources核实，输出JSON后用--proposal-file和--model重跑'}
+            'next': '按task里的instructions和schema只依据publicSources核实，输出JSON后用--proposal-file重跑（知道自己的模型名再加--model）'}
 
 
 def authoritative(url):
