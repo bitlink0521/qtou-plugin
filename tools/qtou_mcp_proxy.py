@@ -302,6 +302,60 @@ def call_local_tool(name, arguments):
     return tool_result({'error': {'code': 'NOT_FOUND', 'message': '未知工具', 'tool': name}}, is_error=True)
 
 
+CONFIRM_TOOLS = {'agent_projects_confirm', 'agent_risk_alerts_create'}
+internal_ids = itertools.count(1)
+
+
+def call_upstream_tool(name, arguments):
+    """Tool call made by the bridge itself; returns the parsed JSON payload or {}."""
+    message = {'jsonrpc': '2.0', 'id': 'qtou-internal-%d' % next(internal_ids), 'method': 'tools/call',
+               'params': {'name': name, 'arguments': arguments}}
+    for reply in forward(message):
+        content = ((reply.get('result') or {}).get('content') or []) if isinstance(reply, dict) else []
+        for item in content:
+            if item.get('type') == 'text':
+                try:
+                    return json.loads(item['text'])
+                except ValueError:
+                    return {}
+    return {}
+
+
+def first_value(data, *keys):
+    for key in keys:
+        value = data.get(key) if isinstance(data, dict) else None
+        if value not in (None, ''):
+            return str(value)
+    return ''
+
+
+def confirm_message(name, arguments):
+    if name == 'agent_projects_confirm':
+        pending = call_upstream_tool('agent_projects_get', {'pendingId': arguments.get('pendingId')})
+        lines = ['确认把这个项目入正式池？',
+                 '项目：' + (first_value(pending, 'projectName', 'project_name') or '（未取到）'),
+                 '公司：' + (first_value(pending, 'companyName', 'company_name') or '（未取到）')]
+        round_label = first_value(pending, 'roundLabel', 'round_label')
+        industry = first_value(pending, 'industryLabel', 'industry_label')
+        if round_label or industry:
+            lines.append('轮次 / 行业：%s / %s' % (round_label or '-', industry or '-'))
+        lines.append('待确认编号：' + str(arguments.get('pendingId') or ''))
+        return '\n'.join(lines)
+    grade = {'high': '高（网页显示「重大」）', 'medium': '中（网页显示「警告」）', 'low': '低（网页显示「警告」）'}
+    return '\n'.join(['确认把这条风险预警写入轻投？',
+                      '项目：' + str(arguments.get('projectId') or ''),
+                      '等级：' + grade.get(str(arguments.get('grade')), str(arguments.get('grade') or '')),
+                      '事件：' + str(arguments.get('matters') or arguments.get('theme') or ''),
+                      '结论：' + str(arguments.get('conclusion') or arguments.get('evidence') or '')[:300]])
+
+
+def confirmed_by_user(name, arguments):
+    """Shows a confirm card (MCP form without fields); True only when the person accepts."""
+    reply = request_client('elicitation/create', {'message': confirm_message(name, arguments),
+                                                  'requestedSchema': {'type': 'object', 'properties': {}}})
+    return ((reply or {}).get('result') or {}).get('action') == 'accept'
+
+
 def with_local_tools(replies):
     for reply in replies:
         tools = (reply.get('result') or {}).get('tools') if isinstance(reply, dict) else None
@@ -349,6 +403,11 @@ def handle(message):
                         'result': call_local_tool(params['name'], params.get('arguments') or {})}]
         elif method == 'tools/list':
             replies = with_local_tools(forward(message))
+        elif (method == 'tools/call' and params.get('name') in CONFIRM_TOOLS and session['client_form']
+              and not confirmed_by_user(params['name'], params.get('arguments') or {})):
+            replies = [{'jsonrpc': '2.0', 'id': message.get('id'), 'result': tool_result(
+                {'error': {'code': 'USER_DECLINED', 'message': '用户在确认卡上没有同意，本次未写入', 'tool': params['name']}},
+                is_error=True)}]
         else:
             replies = forward(message)
     except LoginCancelled:

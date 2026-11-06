@@ -18,6 +18,7 @@ class FakeQtou(BaseHTTPRequestHandler):
     logins = []
     revoked = []
     valid = set()
+    calls = []
 
     def log_message(self, *args):
         pass
@@ -41,7 +42,14 @@ class FakeQtou(BaseHTTPRequestHandler):
         key = self.headers.get('Authorization', '')[7:]
         if key not in FakeQtou.valid:
             return self.send_json(401, {'jsonrpc': '2.0', 'error': {'code': 10007, 'message': 'bad key'}})
-        result = {'tools': [{'name': 'agent_health'}]} if message.get('method') == 'tools/list' else {'as': key}
+        FakeQtou.calls.append(message)
+        tool = (message.get('params') or {}).get('name')
+        if message.get('method') == 'tools/list':
+            result = {'tools': [{'name': 'agent_health'}]}
+        elif tool == 'agent_projects_get':
+            result = {'content': [{'type': 'text', 'text': json.dumps({'projectName': '心永科技', 'companyName': '心永（深圳）科技有限公司'})}]}
+        else:
+            result = {'as': key}
         self.send_json(200, {'jsonrpc': '2.0', 'id': message.get('id'), 'result': result}, session='s1')
 
     def send_json(self, status, payload, session=None):
@@ -87,7 +95,7 @@ class ProxyTests(unittest.TestCase):
         for patch in self.path_patches:
             patch.start()
         proxy.session.update(id=None, initialize=None, upstream_ready=False, client_form=False)
-        FakeQtou.logins, FakeQtou.revoked, FakeQtou.valid = [], [], set()
+        FakeQtou.logins, FakeQtou.revoked, FakeQtou.valid, FakeQtou.calls = [], [], set(), []
 
     def tearDown(self):
         for patch in self.path_patches:
@@ -222,6 +230,45 @@ class ProxyTests(unittest.TestCase):
             proxy.initialize(message)
         self.assertEqual(emitted[0]['result']['protocolVersion'], '2025-06-18')
         self.assertTrue(proxy.session['client_form'])
+
+    def confirm_with_answer(self, action):
+        self.login_as('u1')
+        proxy.session['client_form'] = True
+        sent = []
+
+        def client(message):
+            sent.append(message)
+            if message.get('method') == 'elicitation/create':
+                proxy.route({'jsonrpc': '2.0', 'id': message['id'], 'result': {'action': action}})
+
+        with mock.patch.object(proxy, 'emit', side_effect=client):
+            proxy.handle({'jsonrpc': '2.0', 'id': 8, 'method': 'tools/call',
+                          'params': {'name': 'agent_projects_confirm', 'arguments': {'pendingId': 'p1', 'confirmToken': 't'}}})
+        forwarded = [c for c in FakeQtou.calls if (c.get('params') or {}).get('name') == 'agent_projects_confirm']
+        return sent, forwarded
+
+    def test_confirm_card_shows_project_and_forwards_on_accept(self):
+        sent, forwarded = self.confirm_with_answer('accept')
+        card = sent[0]['params']
+        self.assertIn('心永科技', card['message'])
+        self.assertIn('心永（深圳）科技有限公司', card['message'])
+        self.assertEqual(card['requestedSchema']['properties'], {})
+        self.assertEqual(len(forwarded), 1)
+        self.assertEqual(sent[-1]['id'], 8)
+
+    def test_confirm_card_decline_does_not_write(self):
+        sent, forwarded = self.confirm_with_answer('decline')
+        self.assertEqual(forwarded, [])
+        self.assertIn('USER_DECLINED', sent[-1]['result']['content'][0]['text'])
+
+    def test_client_without_forms_keeps_text_confirmation(self):
+        self.login_as('u1')
+        emitted = []
+        with mock.patch.object(proxy, 'emit', side_effect=emitted.append):
+            proxy.handle({'jsonrpc': '2.0', 'id': 9, 'method': 'tools/call',
+                          'params': {'name': 'agent_projects_confirm', 'arguments': {'pendingId': 'p1'}}})
+        self.assertEqual(len(emitted), 1)
+        self.assertNotIn('elicitation/create', json.dumps(emitted))
 
     def test_notifications_get_no_reply(self):
         self.login_as('u1')
