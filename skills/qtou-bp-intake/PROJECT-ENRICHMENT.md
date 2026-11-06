@@ -7,7 +7,7 @@
 1. 读取用户项目名/完整公司名、已有BP或已解析字段，保留原值及来源。名称有同名歧义先消歧，不把另一公司的信息拼进来。
 2. 默认Tavily search找官网、官方披露等来源，再extract核对原文；Grok API仅整理可核对事实并输出结构化建议。模型输出不是来源证据，检索失败也不等于没有信息。每项建议保留URL、原文片段与核验状态，冲突/未知留空并解释。
 3. 使用独立CLI `tools/project-enrichment/enrich.py`（在插件根目录，即本skill目录的 `../../tools/`，随插件分发），具体完整参数以当前`--help`和该目录README为准。Tavily有运行时env key时可自动search+extract；此Mac没有该key时，Bot必须先使用已连接Tavily插件真实检索与提取，将结果按CLI规定schema存成sources JSON，再交CLI整理，不让缺key退化成模型臆测。
-4. Grok凭据只通过用户提供的凭据文件读取，CLI引用原文件；禁止复制到项目、生成文件、日志或聊天。失败只报脱敏错误，不回显请求头、key或原异常体。
+4. Grok凭据默认读本机`~/.qtou/grok-credentials`，也可用用户提供的凭据文件，CLI引用原文件；Tavily key默认读`TAVILY_API_KEY`或`~/.qtou/tavily-key`；禁止复制到项目、生成文件、日志或聊天。失败只报脱敏错误，不回显请求头、key或原异常体。
 5. 输出有来源的补全draft和missing-only patch，先给用户看“原值 / 建议 / 出处 / 未知”。有原值的字段一律不覆盖；空值判断按CLI规则，不把有效的0/false当缺失。用户如要替换已有值，单列建议并重新确认，不擅自套missing-only patch。
 6. 原BP文本可用`--bp-text-file`提供；已解析BP可用`--parsed-bp-file`提供。生成供原`agent_bp_parse`再次预览的BP仍保留原有内容/字段格式，只填缺失字段，不把整份BP改写成营销文案。核对CLI产物与原BP差异后再使用。
 7. 调原`agent_bp_parse({text: "补全后的BP"})`只读预览，检查公司身份、行业/轮次字典匹配及缺口；展示预览。之后仍按现有SKILL的MC3：`agent_projects_create_pending`→查询pending→聊天确认卡→只有用户点击确认才`agent_projects_confirm`。补全CLI本身绝不调用写库工具、创建pending或自动confirm。
@@ -20,7 +20,7 @@ python3 <插件根目录>/tools/project-enrichment/enrich.py \
   --output /absolute/draft.json
 ```
 
-可选`--existing-file /absolute/existing.json`、`--bp-text-file /absolute/bp.txt`、`--parsed-bp-file /absolute/parsed.json`、`--grok-credentials-file /absolute/credentials-file`。凭据也可由`GROK_API_KEY_FILE`指定，不在skill硬码用户本机凭据路径；模型默认`grok-4.3`，可用`GROK_MODEL`覆盖。Tavily env key存在时可省`--sources-file`自动search+extract。Bot代存插件来源采用：
+可选`--existing-file /absolute/existing.json`、`--bp-text-file /absolute/bp.txt`、`--parsed-bp-file /absolute/parsed.json`、`--grok-credentials-file /absolute/credentials-file`。凭据默认读`~/.qtou/grok-credentials`，也可由`GROK_API_KEY_FILE`指定；模型默认`grok-4.3`，可用`GROK_MODEL`覆盖。Tavily key（`TAVILY_API_KEY`或`~/.qtou/tavily-key`）存在时可省`--sources-file`自动search+extract。Bot代存插件来源采用：
 
 ```json
 {

@@ -18,6 +18,8 @@
 
 需要本机有 `python3`（Mac 第一次用时按提示安装开发者工具即可）。
 
+入池时天眼查查不到公司，会改用 Tavily 搜公开资料、Grok 核实后建档。要用这条兜底，把 Grok 凭据文件放到 `~/.qtou/grok-credentials`、Tavily key 放到 `~/.qtou/tavily-key`（权限都设成 600），插件自动读取，不用在聊天里提供。
+
 ## 安装
 
 ### Codex
