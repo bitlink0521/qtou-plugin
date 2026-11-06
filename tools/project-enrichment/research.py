@@ -1,5 +1,4 @@
 """Field-directed public research contract, shared by HTTP and plugin execution."""
-import os
 from datetime import datetime
 import enrich
 import qtou_shared
@@ -44,7 +43,7 @@ def coverage(plan_value,bundle):
  return errors
 
 def collect(plan_value, previous=None, request=enrich.request_json):
- key=os.environ.get('TAVILY_API_KEY')
+ key=qtou_shared.tavily_key()
  if not key:raise enrich.EnrichmentError('TAVILY_PLUGIN_REQUIRED','使用已连接Tavily插件完成research-plan.json后提供sources-file；无需聊天密钥')
  bundle=previous or {'companyName':plan_value['companyName'],'queries':[],'sources':[],'extractions':[]}
  seen={r['url'] for r in bundle['sources']}

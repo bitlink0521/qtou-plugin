@@ -64,7 +64,7 @@ def grok_json(config, instructions, user_payload, schema_name, schema, max_token
 
 
 def collect_tavily(company, key=None, opener=None):
-    key = key or os.environ.get('TAVILY_API_KEY')
+    key = key or qtou_shared.tavily_key()
     if not key:
         raise EnrichmentError('TAVILY_CONFIG', '未配置Tavily API凭据；请用已连接插件检索并提取正文，再传入sources-file')
     request = lambda url, payload: request_json(url, payload, key, 'TAVILY', opener)

@@ -1,5 +1,4 @@
 """Tavily 采集层。搜索结果是候选证据，不自动判定风险。"""
-import os
 import sys
 from pathlib import Path
 
@@ -13,7 +12,7 @@ class SearchUnavailable(RuntimeError):
 
 class TavilyClient:
     def __init__(self, key=None, opener=None):
-        self._key = key or os.environ.get('TAVILY_API_KEY', '')
+        self._key = key or qtou_shared.tavily_key()
         self._open = opener or qtou_shared.no_redirect_opener()
 
     def search(self, query):

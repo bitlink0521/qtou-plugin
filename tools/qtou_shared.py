@@ -12,6 +12,8 @@ DEFAULT_MCP_URL = os.environ.get('QTOU_MCP_URL') or 'http://113.250.189.74:18081
 TOKEN_PATH = os.path.expanduser('~/.qtou/connector-token')
 ACCOUNTS_PATH = os.path.expanduser('~/.qtou/accounts.json')
 MIGRATED_ACCOUNT_NAME = '已保存账号'
+GROK_CREDENTIALS_PATH = os.path.expanduser('~/.qtou/grok-credentials')
+TAVILY_KEY_PATH = os.path.expanduser('~/.qtou/tavily-key')
 TAVILY_API = 'https://api.tavily.com'
 
 
@@ -55,6 +57,17 @@ def public_url(url):
 
 # Tavily. `request(url, payload)` returns parsed JSON; each caller supplies its own key and error mapping.
 
+def tavily_key(key_path=None):
+    """TAVILY_API_KEY, else the key saved in ~/.qtou/tavily-key, else ''."""
+    key = os.environ.get('TAVILY_API_KEY', '').strip()
+    if key:
+        return key
+    try:
+        return Path(key_path or TAVILY_KEY_PATH).read_text().strip()
+    except OSError:
+        return ''
+
+
 def tavily_search(request, query, include_domains=None, max_results=5):
     """Returns (rows, raw_hit_count); rows keep only public URLs: url, title, content, publishedDate."""
     payload = {'query': query, 'search_depth': 'advanced', 'max_results': max_results}
@@ -84,10 +97,14 @@ class GrokConfigError(ValueError):
     pass
 
 
-def grok_config(credentials_file=None):
+def grok_config(credentials_file=None, default_file=None):
+    """Explicit file, else GROK_API_KEY_FILE, else env keys, else ~/.qtou/grok-credentials when present."""
     key = os.environ.get('GROK_API_KEY') or os.environ.get('XAI_API_KEY')
     base = os.environ.get('GROK_BASE_URL') or os.environ.get('XAI_BASE_URL')
     file_path = credentials_file or os.environ.get('GROK_API_KEY_FILE')
+    default_file = default_file or GROK_CREDENTIALS_PATH
+    if not file_path and not key and os.path.exists(default_file):
+        file_path = default_file
     if file_path:
         try:
             text = Path(file_path).read_text()
@@ -108,7 +125,7 @@ def grok_config(credentials_file=None):
         raise GrokConfigError('未配置Grok API凭据')
     if parts.scheme != 'https' or not parts.hostname or parts.username or parts.password or parts.query or parts.fragment:
         raise GrokConfigError('Grok地址须为无凭据、无查询参数的HTTPS API地址')
-    model = os.environ.get('GROK_MODEL', 'grok-4.3')
+    model = os.environ.get('GROK_MODEL', 'grok-4.7')
     if not model.startswith('grok-'):
         raise GrokConfigError('补全模型须为Grok模型')
     return key, base, model
