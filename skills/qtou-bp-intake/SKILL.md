@@ -28,7 +28,7 @@ description: >-
 
 **描述字段写整理稿，不贴原文**：简介、主营业务、团队、竞品、财务等 value 按 [PROJECT-ENRICHMENT.md](PROJECT-ENRICHMENT.md)「字段value怎么写」整理成通顺、简短的描述（去页码和表格断行，数字照抄），原文只放 `sources.quote`；把整页 BP 当 value 或多个字段写同一段会被服务端拒绝。
 
-主动上网补齐入池所需的全部信息：工商字段、官网、主营业务、简介、荣誉、融资、地址、联系方式等，按 [PROJECT-ENRICHMENT.md](PROJECT-ENRICHMENT.md) 两轮联网检索并取正文（检索工具顺序见该文件）。天眼查查不到时，confirm 带 `companyFallback`（联网检索正文 + 你自己核实，schemaVersion=1，确知模型名再用 `--model` 写上，不知道就不写），不用另配 Grok。
+主动上网补齐入池所需的全部信息：工商字段、官网、主营业务、简介、荣誉、融资、地址、联系方式等，按 [PROJECT-ENRICHMENT.md](PROJECT-ENRICHMENT.md) 两轮联网检索并取正文（检索工具顺序见该文件）。天眼查查不到时，confirm 带 `companyFallback`（联网检索正文 + 你自己核实，schemaVersion=1），不用另配 Grok。
 
 底线（任一不满足，该项不写）：
 

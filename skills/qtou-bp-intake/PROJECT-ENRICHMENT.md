@@ -22,7 +22,7 @@ python3 <插件根目录>/tools/project-enrichment/enrich.py \
 
 可选`--existing-file /absolute/existing.json`、`--bp-text-file /absolute/bp.txt`、`--parsed-bp-file /absolute/parsed.json`、`--verifier grok --grok-credentials-file /absolute/credentials-file`。
 
-**Agent自己核实（默认）**：第一次运行不带`--proposal-file`，返回`status=proposal_required`并写出`verify-task.json`（instructions、schema、带S1/S2编号的publicSources）。Agent只依据其中publicSources按instructions逐字段核实，输出符合schema的JSON存为文件，再用同样参数加`--proposal-file 该文件`重跑。确知自己的模型名时再加`--model 模型名`，原样写进证据provider.responseModel；不知道就不传，不要猜，也不要因此停下，检索和核实照常由你完成。
+**Agent自己核实（默认）**：第一次运行不带`--proposal-file`，返回`status=proposal_required`并写出`verify-task.json`（instructions、schema、带S1/S2编号的publicSources）。Agent只依据其中publicSources按instructions逐字段核实，输出符合schema的JSON存为文件，再用同样参数加`--proposal-file 该文件`重跑。检索和核实都由你完成，不需要提供模型名。
 
 Grok凭据默认读`~/.qtou/grok-credentials`，也可由`GROK_API_KEY_FILE`指定；模型默认`grok-4.7`，可用`GROK_MODEL`覆盖。Tavily key（`TAVILY_API_KEY`或`~/.qtou/tavily-key`）存在时可省`--sources-file`自动search+extract。Bot代存插件来源采用：
 
@@ -64,7 +64,7 @@ Grok凭据默认读`~/.qtou/grok-credentials`，也可由`GROK_API_KEY_FILE`指�
 
 原天眼查逻辑和网页入口不变。MCP确认时优先复用已有公司；新公司先调用原工商服务。天眼查无结果/不可用时，默认用本流程的真实联网检索正文（按检索工具顺序）与调用插件的Agent核实结果兜底，不能直接把外部查询失败等同于公司不存在，也不能删除有效公司ID校验。
 
-`agent_projects_confirm`新增可选`companyFallback`对象，直接使用本CLI schemaVersion=1的完整补全draft（不是巡检schemaVersion=2）。须含companyName、provider.responseModel（实际核实所用模型名）、modelProposal主体匹配、searchReceipts实际查询及带时区时间、sources原文和fields中supported业务与逐字出处。后端核对全称、查询/提取时间、来源及业务摘录，只有核实结果才能创建有ID的公司档案；法人、注册资本、成立时间等未知字段留空，不能从模型猜值写工商主数据。此后端仅校验Agent提供的证据，不会自行调用Tavily插件；Bot负责真实查询和提取。
+`agent_projects_confirm`新增可选`companyFallback`对象，直接使用本CLI schemaVersion=1的完整补全draft（不是巡检schemaVersion=2）。须含companyName、modelProposal主体匹配、searchReceipts实际查询及带时区时间、sources原文和fields中supported业务与逐字出处。后端核对全称、查询/提取时间、来源及业务摘录，只有核实结果才能创建有ID的公司档案；法人、注册资本、成立时间等未知字段留空，不能从模型猜值写工商主数据。此后端仅校验Agent提供的证据，不会自行调用Tavily插件；Bot负责真实查询和提取。
 
 通常在入池确认前完成补全，并将完整draft随已获用户同意的`agent_projects_confirm({pendingId, companyFallback: draft})`提交。已确认的同一pending因天眼查失败保留pending时，补充真实查询凭证后重试同一ID，不重复create_pending；用户原确认仅覆盖原项目字段，补全若改变原字段仍须重新展示确认。证据失败仍保持pending，不直连库、不用空壳/虚构工商字段兜底。数据库及权限失败不得伪装成天眼查查询失败。
 
@@ -74,7 +74,7 @@ Grok凭据默认读`~/.qtou/grok-credentials`，也可由`GROK_API_KEY_FILE`指�
 
 入池成功不等于基本情况补全完成。调用`agent_projects_profile_get({pendingId})`盘点工商、公司扩展和项目字段，以及confirmedFields原BP/管理字段。按当前完整清单逐项核对，不只建公司关联就结束。
 
-按检索工具顺序真实检索并取正文，找到工商公开页面、公司正式披露/半年报及官网；用`profile.py --company ... --sources-file ... --output ...`取核实任务，Agent核实后加`--proposal-file ...`（确知模型名再加`--model`）生成专用schemaVersion=1证据。核实只用公司公开资料，不把私有BP发给外部模型。PDF表格串列时核对渲染页，换用连续正文摘录；不得拼接成原文。模型遗漏、改写引号或单位时逐项人工复核，保留原模型响应与修订理由，不声称模型输出已核实。
+按检索工具顺序真实检索并取正文，找到工商公开页面、公司正式披露/半年报及官网；用`profile.py --company ... --sources-file ... --output ...`取核实任务，Agent核实后加`--proposal-file ...`生成专用schemaVersion=1证据。核实只用公司公开资料，不把私有BP发给外部模型。PDF表格串列时核对渲染页，换用连续正文摘录；不得拼接成原文。模型遗漏、改写引号或单位时逐项人工复核，保留原模型响应与修订理由，不声称模型输出已核实。
 
 调用`agent_projects_profile_fill({pendingId,evidence,confirmed:false})`只读预览。ready项可补；已有非空值一律preserved；冲突/无原文/字典未匹配为needs_verification，未知留空。注册资本输入必须带元/万元单位，后端统一转为轻投万元。地区、币种、状态、工商类型用现有字典映射，不猜ID。新三板不等于A股上市，isListing字典缺失时留空并记录原因。
 
@@ -87,13 +87,13 @@ Grok凭据默认读`~/.qtou/grok-credentials`，也可由`GROK_API_KEY_FILE`指�
 
 ## 自动执行入口与检索深度（2026-10-29修订）
 
-插件/Skill是Bot的编排入口；`tools/project-enrichment/workflow.py`负责缺失字段计划、查询覆盖门禁、Agent核实（返回proposal_required时按verify-task.json核实后带--proposal-file重跑（确知模型名再加--model））、MCP预览/补空值与回读。轻投MCP负责主体、出处和字典校验及事务写入；Java后端不做检索。此功能不改原天眼查和BP确认流程。不会后台定时刷新所有企业；每次BP入池或用户要求补全时由Bot执行。
+插件/Skill是Bot的编排入口；`tools/project-enrichment/workflow.py`负责缺失字段计划、查询覆盖门禁、Agent核实（返回proposal_required时按verify-task.json核实后带--proposal-file重跑）、MCP预览/补空值与回读。轻投MCP负责主体、出处和字典校验及事务写入；Java后端不做检索。此功能不改原天眼查和BP确认流程。不会后台定时刷新所有企业；每次BP入池或用户要求补全时由Bot执行。
 
 1. 入池后默认运行`workflow.py --pending-id 当前pendingId --output-dir 本轮证据目录`。部署时使用本服务器相对工具路径；不要照搬Mac绝对路径。先只读盘点全部30字段，原值（含0/false）保留。
 2. 有Tavily key时脚本自动检索提取；没有时返回`research_required`和`research-plan.json`，你必须按检索工具顺序（Tavily插件，否则自带联网搜索+打开网页）逐项执行计划，而不是把这个状态作为完成。禁止索要聊天明文密钥。
 3. 按计划保留每次真实查询的queryId、query、include_domains、round、source（Tavily插件为tavily_plugin，自带搜索为agent_search）、searchedAt（带时区实际开始时间）、status=success/failed、hits和urls。官方域过滤按计划执行。success的0命中只表示本次搜索未收录。第一轮至少覆盖工商（含官方域）、官网联系方式、正式披露三组；不能用泛融资新闻代替。
 4. 首轮没有得到字段证据时，脚本输出第二轮按缺失字段名定向补查的计划。Bot须执行第二轮并追加实际凭证，不能复制上一轮查询记录、时间或轮次。每轮提取候选正文；搜索摘要不可作正文，404/失败页不可作公司资料。同名、关联公司、集团与法律主体分开，保留逐候选review的URL、采纳/排除和理由。发现新强候选先读该页，不无边界反复改query。有限两轮结束后仍无证据明确列缺口，不许声称穷尽互联网。
-5. 将真实正文与完整queries存为sources-file，再次运行同一workflow并传`--sources-file 本轮来源.json`，按返回的verify-task.json核实后加`--proposal-file 核实结果.json`（确知模型名再加`--model`）。新增queries契约在原sources格式上增加第3项字段；每条source仍含url/title/content/retrievedAt/publishedDate。所有查询组凭证未齐或失败返回research_required，未提取正文不能进入核实阶段。通过此门禁仅表示完成规定检索，不表示事实已核实。
+5. 将真实正文与完整queries存为sources-file，再次运行同一workflow并传`--sources-file 本轮来源.json`，按返回的verify-task.json核实后加`--proposal-file 核实结果.json`。新增queries契约在原sources格式上增加第3项字段；每条source仍含url/title/content/retrievedAt/publishedDate。所有查询组凭证未齐或失败返回research_required，未提取正文不能进入核实阶段。通过此门禁仅表示完成规定检索，不表示事实已核实。
 6. 模型产物必须逐项阅读核对主体、原文连续摘录20–200字、值、日期/单位和出处可信度；不得采用页面AI生成的商业分析作为披露事实。保留原模型evidence.json，必要时另存evidence-reviewed.json及修订理由。用`--evidence-file 已审核证据.json`传回时来源和查询必须与本轮来源完全一致。不能为通过门禁伪造receipt或把模型supported自动当人工核实。
 7. 用户已确认入池（或要求补全该项目）即视为补空值授权：Bot完成第6项审核后，用同一命令追加`--apply`（与`--evidence-file`配合）写同一项目，不再询问；不自动confirm入池。未确认入池的pending不能apply。workflow回读并检查projectId/companyId、已填值及原BP/非空字段不变，异常必须报failed，不能因HTTP200报成功。
 8. 最后必须按当前用户浏览器复用规则打开原项目工商页核验，保存截图；result.json中的browserVerificationRequired=true是待执行检查，不能当网页验收完成。仍缺字段逐项报告：无可靠公开来源、冲突、提取失败或本地字典不匹配；partial不是全部补全。后续再次补全只查仍缺的字段，不自动覆盖已有信息。

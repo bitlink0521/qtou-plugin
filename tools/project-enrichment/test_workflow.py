@@ -37,7 +37,7 @@ class WorkflowTests(unittest.TestCase):
     return SNAP
   with tempfile.TemporaryDirectory() as d:
    root=Path(d);f=root/'input.json';f.write_text(json.dumps({'companyName':SNAP['companyName'],'queries':[],'sources':[]}))
-   args=argparse.Namespace(output_dir=root,pending_id='pending',sources_file=f,evidence_file=None,apply=True,verifier='agent',proposal_file=None,model=None,grok_credentials_file=None)
+   args=argparse.Namespace(output_dir=root,pending_id='pending',sources_file=f,evidence_file=None,apply=True,verifier='agent',proposal_file=None,grok_credentials_file=None)
    r=workflow.run(args,Client());self.assertEqual(r['status'],'research_required');self.assertEqual(r['businessWrites'],0);self.assertTrue((root/'research-plan.json').exists())
  def test_readback_detects_wrong_project_original_change_and_missing_write(self):
   after=copy.deepcopy(SNAP);after['fields'][0]['value']='张甲'
@@ -67,7 +67,7 @@ class WorkflowTests(unittest.TestCase):
     return applied if args['confirmed'] else preview
   with tempfile.TemporaryDirectory() as d:
    root=Path(d);f=root/'input.json';f.write_text(json.dumps(bundle));e=root/'reviewed.json';e.write_text(json.dumps(evidence))
-   a=argparse.Namespace(output_dir=root/'out',pending_id='pending',sources_file=f,evidence_file=e,apply=True,verifier='agent',proposal_file=None,model=None,grok_credentials_file=None)
+   a=argparse.Namespace(output_dir=root/'out',pending_id='pending',sources_file=f,evidence_file=e,apply=True,verifier='agent',proposal_file=None,grok_credentials_file=None)
    r=workflow.run(a,Client());self.assertEqual(r['filledCount'],2);self.assertTrue(r['readbackVerified']);self.assertEqual(r['status'],'complete')
    self.assertEqual([x[0] for x in calls],['agent_projects_profile_get','agent_projects_profile_fill','agent_projects_profile_fill','agent_projects_profile_get'])
 
@@ -87,7 +87,7 @@ class WorkflowTests(unittest.TestCase):
     return preview
   with tempfile.TemporaryDirectory() as d:
    root=Path(d);f=root/'input.json';f.write_text(json.dumps(bundle));e=root/'evidence.json';e.write_text(json.dumps(evidence))
-   a=argparse.Namespace(output_dir=root/'out',pending_id='pending',sources_file=f,evidence_file=e,apply=False,verifier='agent',proposal_file=None,model=None,grok_credentials_file=None)
+   a=argparse.Namespace(output_dir=root/'out',pending_id='pending',sources_file=f,evidence_file=e,apply=False,verifier='agent',proposal_file=None,grok_credentials_file=None)
    r=workflow.run(a,Client());self.assertEqual(r['status'],'review_required');self.assertEqual(r['researchRounds'],2);self.assertEqual(calls.count('agent_projects_profile_fill'),1)
 
 if __name__=='__main__':unittest.main()

@@ -58,7 +58,7 @@ def run(args,client=None):
    else:
     command=[sys.executable,str(Path(__file__).with_name('profile.py')),'--company',snap['companyName'],'--sources-file',str(out/'sources.json'),'--output',str(out/'evidence.json')]
     command+=['--verifier',args.verifier,'--task-output',str(out/'verify-task.json')]
-    for flag,value in (('--proposal-file',args.proposal_file),('--model',args.model),('--grok-credentials-file',args.grok_credentials_file)):
+    for flag,value in (('--proposal-file',args.proposal_file),('--grok-credentials-file',args.grok_credentials_file)):
      if value:command+=[flag,str(value)]
     result=subprocess.run(command,capture_output=True,text=True,timeout=150)
     if result.returncode:raise enrich.EnrichmentError('VERIFY_FAILED','模型核实失败，未写入；详见独立CLI脱敏输出')
