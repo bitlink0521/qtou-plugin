@@ -43,6 +43,18 @@ class LocalCredentialTest(unittest.TestCase):
         with self.assertRaises(qtou_shared.GrokConfigError):
             qtou_shared.grok_config(default_file=self.path('missing'))
 
+    def test_default_auth_login_url_is_demo_74(self):
+        self.assertEqual(
+            qtou_shared.DEFAULT_AUTH_LOGIN_URL,
+            'http://113.250.189.74:18081/api/v1/agent/auth/login')
+        self.assertNotIn('agent.bitilinks.cn', qtou_shared.DEFAULT_AUTH_LOGIN_URL)
+        self.assertNotIn('localhost', qtou_shared.DEFAULT_AUTH_LOGIN_URL)
+        self.assertNotIn('127.0.0.1', qtou_shared.DEFAULT_AUTH_LOGIN_URL)
+        with patch.dict(os.environ, {'QTOU_LOGIN_URL': ''}, clear=False):
+            self.assertEqual(qtou_shared.auth_login_url(), qtou_shared.DEFAULT_AUTH_LOGIN_URL)
+        with patch.dict(os.environ, {'QTOU_LOGIN_URL': 'http://example.test/api/v1/agent/auth/login'}):
+            self.assertEqual(qtou_shared.auth_login_url(), 'http://example.test/api/v1/agent/auth/login')
+
     def test_tavily_key_prefers_env_then_saved_file(self):
         saved = self.path('tavily', 'tvly-saved\n')
         self.assertEqual(qtou_shared.tavily_key(saved), 'tvly-saved')

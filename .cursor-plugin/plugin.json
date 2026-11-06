@@ -18,17 +18,5 @@
     "due-diligence"
   ],
   "logo": "assets/logo.png",
-  "variables": {
-    "type": "object",
-    "required": [
-      "QTOU_CONNECTOR_TOKEN"
-    ],
-    "properties": {
-      "QTOU_CONNECTOR_TOKEN": {
-        "type": "string",
-        "title": "轻投 Agent Key",
-        "description": "Bearer qtpat_…（bot 代登录签发后写入；勿手抄到聊天）"
-      }
-    }
-  }
+  "mcpServers": "./.grok-mcp.json"
 }
