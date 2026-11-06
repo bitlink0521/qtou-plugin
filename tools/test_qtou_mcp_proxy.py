@@ -148,11 +148,12 @@ class ProxyTests(unittest.TestCase):
             proxy.handle({'jsonrpc': '2.0', 'id': 3, 'method': 'tools/list'})
         error = emitted[0]['error']
         self.assertEqual(error['code'], -32001)
-        self.assertIn('RequestUserForm', error['message'])
+        self.assertIn('宿主发起安全登录', error['message'])
+        self.assertNotIn('弹安全表单就能', error['message'])
         self.assertIn(proxy.DEFAULT_AUTH_LOGIN_URL, error['message'])
         self.assertIn('agent.bitilinks.cn', error['message'])
         self.assertEqual(error['data']['code'], 'AUTH_REQUIRED')
-        self.assertEqual(error['data']['action'], 'RequestUserForm')
+        self.assertEqual(error['data']['action'], 'HostSecureLogin')
         self.assertEqual(error['data']['loginUrl'], proxy.DEFAULT_AUTH_LOGIN_URL)
         self.assertEqual(error['data']['submit'], 'qtou_account_add')
         self.assertEqual(proxy.read_token(), '')
@@ -181,7 +182,7 @@ class ProxyTests(unittest.TestCase):
         self.assertTrue(is_error)
         self.assertEqual(result['error']['code'], 'INVALID_ARGUMENT')
         self.assertEqual(result['login']['loginUrl'], proxy.DEFAULT_AUTH_LOGIN_URL)
-        self.assertEqual(result['login']['action'], 'RequestUserForm')
+        self.assertEqual(result['login']['action'], 'HostSecureLogin')
         self.assertEqual(proxy.read_token(), '')
 
     def test_account_add_wrong_password_does_not_save_or_echo(self):
@@ -192,6 +193,41 @@ class ProxyTests(unittest.TestCase):
         self.assertEqual(result['login']['loginUrl'], proxy.DEFAULT_AUTH_LOGIN_URL)
         self.assertEqual(proxy.read_token(), '')
         self.assertNotIn(secret, json.dumps(result, ensure_ascii=False))
+
+    def test_tools_list_account_add_schema_exposes_username_password(self):
+        self.login_as('u1')
+        emitted = []
+        with mock.patch.object(proxy, 'emit', side_effect=emitted.append):
+            proxy.handle({'jsonrpc': '2.0', 'id': 21, 'method': 'tools/list'})
+        tools = {tool['name']: tool for tool in emitted[0]['result']['tools']}
+        props = tools['qtou_account_add']['inputSchema']['properties']
+        self.assertIn('username', props)
+        self.assertIn('password', props)
+        self.assertEqual(props['username']['type'], 'string')
+        self.assertEqual(props['password']['type'], 'string')
+
+    def test_account_add_elicitation_cancel_returns_auth_required(self):
+        emitted = []
+        with mock.patch.object(proxy, 'ask_credentials', side_effect=proxy.LoginCancelled), \
+                mock.patch.object(proxy, 'emit', side_effect=emitted.append):
+            proxy.handle({'jsonrpc': '2.0', 'id': 23, 'method': 'tools/call',
+                          'params': {'name': 'qtou_account_add', 'arguments': {}}})
+        error = emitted[0]['error']
+        self.assertEqual(error['code'], -32001)
+        self.assertEqual(error['data']['code'], 'AUTH_REQUIRED')
+        self.assertEqual(error['data']['action'], 'HostSecureLogin')
+        self.assertIn('宿主发起安全登录', error['message'])
+        self.assertIn(proxy.DEFAULT_AUTH_LOGIN_URL, error['message'])
+        self.assertEqual(proxy.read_token(), '')
+
+    def test_account_add_with_credentials_posts_to_login_url(self):
+        added, is_error = call('qtou_account_add', username='u1', password='right')
+        self.assertFalse(is_error)
+        self.assertEqual(added['current'], 'u1')
+        self.assertEqual(FakeQtou.logins, ['u1'])
+        self.assertEqual(proxy.LOGIN_URL.rsplit('/', 1)[-1], 'login')
+        self.assertTrue(proxy.LOGIN_URL.endswith('/auth/login'))
+        self.assertNotIn('right', json.dumps(added))
 
     def test_form_login_answer_goes_to_bridge_only(self):
         proxy.session['client_form'] = True

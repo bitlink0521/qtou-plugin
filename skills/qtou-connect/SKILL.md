@@ -8,17 +8,21 @@ description: >-
 
 ## 连接
 
-**默认登录（宿主 bot，如 Grok Bot）**：未登录 / 401 / 第一次安装，**直接**在用户自己的聊天里弹出安全表单（RequestUserForm / Vault），收取轻投用户名 + 掩码密码。不要先赌、也不要依赖 MCP elicitation。elicitation 若被取消、报 `-32001`，或用户说「没看到 / 看不到表单」，立刻改弹同一张安全表单。插件自己调用不了 RequestUserForm，未登录时会返回 JSON-RPC `-32001`，`error.data` 为 `AUTH_REQUIRED`（含代签地址和字段），宿主应按此弹表，不要叫用户再试一次 elicitation。
+**默认登录（宿主 bot，如 Grok Bot / 轻投专家）**：未登录 / 401 / 第一次安装，**直接由宿主发起安全登录**采集轻投用户名与密码。不要先调空的 `qtou_account_add`，也不要赌 MCP elicitation。elicitation 若被取消、报 `-32001`，或用户说「没看到 / 看不到表单」，立刻改为宿主安全登录，不要再试 elicitation。插件自己弹不出宿主的安全采集控件；未登录时工具可能返回 JSON-RPC `-32001`，`error.data` 为 `AUTH_REQUIRED`（`action=HostSecureLogin`，含代签地址和字段），宿主应按此发起安全登录。
+
+注意：仅弹出网页类安全表单（例如只能把密文交给浏览器填充的控件）**不等于**已经把密码交给了本插件；安全登录如何把账密交给 `qtou_account_add` 以宿主实现为准（具体通路另定）。密码不得进聊天、不得打印。
 
 1. 已连且冒烟（`agent_health`）通则结束。
-2. 未登录：弹 RequestUserForm（字段：轻投用户名、轻投密码（掩码））。站点必须写死为代签登录 URL `http://113.250.189.74:18081/api/v1/agent/auth/login`（轻投演示站 74）。禁止写成 `agent.bitilinks.cn`（工场，不是轻投）或 `localhost` / `127.0.0.1`（安全表单会拒）。
-3. 拿到表单结果后：调用 `qtou_account_add({ username, password })`（stdio 代理代签并写入本机 `~/.qtou/`，不要回显密码）；若连接器是 HTTP，也可由宿主把表单结果 POST 到上述代签地址，将返回的 `agentKey` 写入插件变量 `QTOU_CONNECTOR_TOKEN`（key 永不进聊天）。然后 `agent_health` 冒烟。
-4. Codex / WorkBuddy / Grok 命令行补充路径：插件的 `qtou` 连接由 `tools/qtou_mcp_proxy.py` 启动。没有可用账号或 key 失效时，它仍可请客户端弹出 MCP 表单（不支持表单的客户端改用 macOS 对话框），签发后保存在本机 `~/.qtou/`，之后自动复用。表单内容只回给启动器，不进聊天。这不是 Grok Bot 的默认路径。工具返回「未登录轻投：已取消登录」时，告诉用户再发一次请求、在表单里登录。
+2. 未登录：宿主发起安全登录，得到可用的 `username` 与 `password`（不要从聊天正文收集密码）。
+3. 调用 `qtou_account_add({ username, password })`（stdio 代理会 POST 到写死的代签 URL 并写入本机 `~/.qtou/`，不要回显密码）；若连接器是 HTTP，也可由宿主把账密 POST 到代签地址，将返回的 `agentKey` 写入插件变量 `QTOU_CONNECTOR_TOKEN`（key 永不进聊天）。然后 `agent_health` 冒烟。
+4. Codex / WorkBuddy / Grok 命令行补充路径：插件的 `qtou` 连接由 `tools/qtou_mcp_proxy.py` 启动。没有可用账号或 key 失效时，它仍可请客户端弹出 MCP 表单（不支持表单的客户端改用 macOS 对话框），签发后保存在本机 `~/.qtou/`，之后自动复用。表单内容只回给启动器，不进聊天。这不是宿主 bot 的默认路径。若返回 `AUTH_REQUIRED` / `-32001`，改由宿主安全登录，不要循环空参 `qtou_account_add`。
+
+代签登录 URL（演示站 74，写死，供代理/宿主 POST）：`http://113.250.189.74:18081/api/v1/agent/auth/login`。禁止写成 `agent.bitilinks.cn`（工场）或 `localhost` / `127.0.0.1`。
 
 ## 多账号（插件启动器提供的本地工具）
 
 - `qtou_account_list`：列出本机已登录的账号，标出当前账号。用户问「现在用的哪个账号」时调它。
-- `qtou_account_add`：添加一个账号并切换为当前账号。优先传入 RequestUserForm 收回的 `username` 与 `password`；不传参数时，支持 elicitation 的客户端会弹 MCP 表单（取消或看不到则返回 `AUTH_REQUIRED`，宿主应立刻改弹 RequestUserForm）。
+- `qtou_account_add`：添加一个账号并切换为当前账号。宿主应传入安全登录得到的 `username` 与 `password`；不要空参去赌 elicitation。取消或 `-32001` 时按 `AUTH_REQUIRED` 由宿主发起安全登录。
 - `qtou_account_switch({ username })`：切换当前账号。
 - `qtou_account_logout({ username? })`：退出账号（不传则退出当前账号），同时在服务端吊销它的 key。
 
@@ -29,13 +33,13 @@ description: >-
 | 项 | 值 |
 | --- | --- |
 | MCP URL | `http://113.250.189.74:18081/api/v1/agent/mcp`（可用环境变量 `QTOU_MCP_URL` 覆盖；默认即此地址。禁止写成 `agent.bitilinks.cn` 或 `localhost` / `127.0.0.1`） |
-| 代签登录 URL（演示 74，写死） | `http://113.250.189.74:18081/api/v1/agent/auth/login`（可用 `QTOU_LOGIN_URL` 覆盖代理自己的 POST 目标；宿主弹表时必须用这个演示站地址，禁止写成工场或 localhost） |
+| 代签登录 URL（演示 74，写死） | `http://113.250.189.74:18081/api/v1/agent/auth/login`（可用 `QTOU_LOGIN_URL` 覆盖代理自己的 POST 目标；禁止写成工场或 localhost） |
 | 传输 | Streamable HTTP |
 | 鉴权 | `Authorization: Bearer <agent_key>` |
 | 连接器名 | `qtou`（Grok 上手工添加的可能叫 `轻投`，二者等价） |
 | 插件变量 | `QTOU_CONNECTOR_TOKEN` |
 
-签发：弹用户聊天里的安全表单收账密（RequestUserForm，不收 PAT，不在聊天里要明文密码）→ 调用 `qtou_account_add` 或代调 `POST http://113.250.189.74:18081/api/v1/agent/auth/login` → 得窄 scope `agentKey` → 由插件写入本机或写入 `QTOU_CONNECTOR_TOKEN`。审计不写密码明文；key 永不进聊天。
+签发：宿主安全登录采集账密（不收 PAT，不在聊天里要明文密码）→ 调用 `qtou_account_add` 或代调 `POST http://113.250.189.74:18081/api/v1/agent/auth/login` → 得窄 scope `agentKey` → 由插件写入本机或写入 `QTOU_CONNECTOR_TOKEN`。审计不写密码明文；key 永不进聊天。
 
 ## 只走 MCP 工具（强制）
 
@@ -60,4 +64,4 @@ description: >-
 
 ## 不做
 
-不手抄 PAT；不在聊天里要账号密码或 key；不拷贝他人 `~/.qtou`；不打开 bot 的 box 桌面代签页；不把登录站点写成 `agent.bitilinks.cn`（工场）或 `localhost` / `127.0.0.1`；不直连业务库；不与工场抢名；调工具不把参数对象、数组、数字写成字符串。
+不手抄 PAT；不在聊天里要账号密码或 key；不拷贝他人 `~/.qtou`；不打开 bot 的 box 桌面代签页；不把代签/MCP 地址写成 `agent.bitilinks.cn`（工场）或 `localhost` / `127.0.0.1`；不直连业务库；不与工场抢名；不空参赌 MCP elicitation；调工具不把参数对象、数组、数字写成字符串。
