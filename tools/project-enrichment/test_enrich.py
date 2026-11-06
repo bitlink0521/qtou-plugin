@@ -134,19 +134,13 @@ class VerifierTests(unittest.TestCase):
             self.assertEqual(task['publicSources'][0]['id'],'S1');self.assertIn('entityMatched',task['schema']['properties'])
             self.assertFalse((p/'out.json').exists())
 
-    def test_agent_proposal_records_the_named_model(self):
-        with tempfile.TemporaryDirectory() as directory:
-            p=Path(directory);(p/'proposal.json').write_text(json.dumps(proposal()))
-            code,status=self.run_main(p,'--proposal-file',str(p/'proposal.json'),'--model','gpt-5.5')
-            self.assertEqual((code,status['status']),(0,'review_required'))
-            d=json.loads((p/'out.json').read_text())
-            self.assertEqual(d['provider'],{'responseModel':'gpt-5.5','verifiedBy':'calling_agent'})
-            self.assertIn('introduction',d['missingOnlyPatch'])
 
-    def test_agent_proposal_requires_model_name(self):
+    def test_agent_proposal_needs_no_model_name(self):
         with tempfile.TemporaryDirectory() as directory:
             p=Path(directory);(p/'proposal.json').write_text(json.dumps(proposal()))
             code,status=self.run_main(p,'--proposal-file',str(p/'proposal.json'))
-            self.assertEqual((code,status['code']),(1,'INPUT'))
+            self.assertEqual((code,status['status']),(0,'review_required'))
+            d=json.loads((p/'out.json').read_text())
+            self.assertEqual(d['provider'],{'verifiedBy':'calling_agent'});self.assertIn('introduction',d['missingOnlyPatch'])
 
 if __name__=='__main__':unittest.main()

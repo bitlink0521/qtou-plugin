@@ -9,11 +9,11 @@
 python3 tools/project-enrichment/enrich.py \
   --company '法定公司全称' --sources-file /absolute/sources.json \
   --bp-text-file /absolute/bp.txt --output /absolute/draft.json
-# 2. Agent 按任务核实、存为 proposal.json 后，带上结果和实际模型名重跑
+# 2. Agent 按任务核实、存为 proposal.json 后，带上结果重跑
 python3 tools/project-enrichment/enrich.py \
   --company '法定公司全称' --sources-file /absolute/sources.json \
   --bp-text-file /absolute/bp.txt --output /absolute/draft.json \
-  --proposal-file /absolute/proposal.json --model '实际模型名'
+  --proposal-file /absolute/proposal.json
 ```
 
 无人值守脚本可加`--verifier grok`改由Grok API核实。Grok支持 `GROK_API_KEY` / `XAI_API_KEY`、`GROK_BASE_URL` / `XAI_BASE_URL`、`GROK_MODEL`（默认grok-4.7）。凭据文件可含一行密钥赋值及一行HTTPS API基础地址，也可只含密钥；默认地址为https://api.x.ai/v1。兼容网关通过相同配置使用，实际服务方由部署者选择。文件路径可用`--grok-credentials-file`显式传入；都没配时读本机`~/.qtou/grok-credentials`。密钥不写代码、草稿或日志；不要在shell命令里直接传密钥。现有Grok CLI登录不能代替API凭据。
@@ -37,7 +37,7 @@ python3 tools/project-enrichment/enrich.py \
 ## 已入池项目基本情况补全
 
 1. `agent_projects_profile_get(pendingId)` 回读当前租户、原入池用户拥有的已确认项目及字段库存。
-2. 联网搜索并提取公开正文，保留真实query、searchedAt、retrievedAt、URL和正文。`python3 tools/project-enrichment/profile.py --help`查看核实参数：默认先返回proposal_required和verify-task.json，Agent核实后带`--proposal-file`、`--model`重跑。
+2. 联网搜索并提取公开正文，保留真实query、searchedAt、retrievedAt、URL和正文。`python3 tools/project-enrichment/profile.py --help`查看核实参数：默认先返回proposal_required和verify-task.json，Agent核实后带`--proposal-file`重跑。
 3. `agent_projects_profile_fill(pendingId,evidence)` 默认仅预览，逐字段返回ready/preserved/unknown/needs_verification。
 4. 用户明确授权补空值后使用同一工具并传`confirmed:true`，事务保存公司、扩展和项目字段及来源审计。权限不扩大，旧入池/天眼查接口保留。
 5. 再次get并核验网页；重复相同补写应filledCount=0。荣誉对应项目页字段。原有字段不覆盖；未知字典不猜ID。该接口不上传PDF附件。
