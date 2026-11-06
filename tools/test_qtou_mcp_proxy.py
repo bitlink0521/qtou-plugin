@@ -91,7 +91,11 @@ class ProxyTests(unittest.TestCase):
         self.dir = tempfile.TemporaryDirectory()
         home = os.path.join(self.dir.name, 'qtou')
         self.path_patches = [mock.patch.object(proxy, 'TOKEN_PATH', os.path.join(home, 'connector-token')),
-                             mock.patch.object(proxy, 'ACCOUNTS_PATH', os.path.join(home, 'accounts.json'))]
+                             mock.patch.object(proxy, 'ACCOUNTS_PATH', os.path.join(home, 'accounts.json')),
+                             mock.patch.dict(os.environ, {
+                                 'QTOU_LOGIN_USERNAME': '',
+                                 'QTOU_LOGIN_PASSWORD': '',
+                             }, clear=False)]
         for patch in self.path_patches:
             patch.start()
         proxy.session.update(id=None, initialize=None, upstream_ready=False, client_form=False)
@@ -228,6 +232,105 @@ class ProxyTests(unittest.TestCase):
         self.assertEqual(proxy.LOGIN_URL.rsplit('/', 1)[-1], 'login')
         self.assertTrue(proxy.LOGIN_URL.endswith('/auth/login'))
         self.assertNotIn('right', json.dumps(added))
+
+
+    def test_account_add_uses_env_credentials_when_args_omitted(self):
+        secret = 'right'
+        with mock.patch.dict(os.environ, {
+            'QTOU_LOGIN_USERNAME': 'env-user',
+            'QTOU_LOGIN_PASSWORD': secret,
+        }), mock.patch.object(proxy, 'ask_credentials') as ask:
+            added, is_error = call('qtou_account_add')
+            self.assertEqual(os.environ.get('QTOU_LOGIN_PASSWORD'), secret)
+        self.assertFalse(is_error)
+        self.assertEqual(added['current'], 'env-user')
+        self.assertEqual(proxy.read_token(), key_for('env-user'))
+        self.assertEqual(FakeQtou.logins, ['env-user'])
+        ask.assert_not_called()
+        dumped = json.dumps(added, ensure_ascii=False)
+        self.assertNotIn(secret, dumped)
+        self.assertNotIn('qtpat_', dumped)
+
+    def test_account_add_params_take_priority_over_env(self):
+        env_secret = 'env-secret-should-not-be-used'
+        with mock.patch.dict(os.environ, {
+            'QTOU_LOGIN_USERNAME': 'env-user',
+            'QTOU_LOGIN_PASSWORD': env_secret,
+        }), mock.patch.object(proxy, 'ask_credentials') as ask:
+            added, is_error = call('qtou_account_add', username='u1', password='right')
+        self.assertFalse(is_error)
+        self.assertEqual(added['current'], 'u1')
+        self.assertNotEqual(added['current'], 'env-user')
+        self.assertEqual(FakeQtou.logins, ['u1'])
+        ask.assert_not_called()
+        dumped = json.dumps(added, ensure_ascii=False)
+        self.assertNotIn(env_secret, dumped)
+        self.assertNotIn('right', dumped)
+        self.assertNotIn('qtpat_', dumped)
+
+    def test_account_add_param_username_and_env_password(self):
+        secret = 'right'
+        with mock.patch.dict(os.environ, {'QTOU_LOGIN_PASSWORD': secret}), \
+                mock.patch.object(proxy, 'ask_credentials') as ask:
+            added, is_error = call('qtou_account_add', username='u1')
+        self.assertFalse(is_error)
+        self.assertEqual(added['current'], 'u1')
+        self.assertEqual(FakeQtou.logins, ['u1'])
+        ask.assert_not_called()
+        self.assertNotIn(secret, json.dumps(added, ensure_ascii=False))
+
+    def test_account_add_without_args_env_or_elicitation_returns_auth_required(self):
+        emitted = []
+        with mock.patch.object(proxy, 'ask_credentials', side_effect=proxy.LoginCancelled), \
+                mock.patch.object(proxy, 'emit', side_effect=emitted.append):
+            proxy.handle({'jsonrpc': '2.0', 'id': 31, 'method': 'tools/call',
+                          'params': {'name': 'qtou_account_add', 'arguments': {}}})
+        error = emitted[0]['error']
+        self.assertEqual(error['code'], -32001)
+        self.assertEqual(error['data']['code'], 'AUTH_REQUIRED')
+        self.assertEqual(error['data']['action'], 'HostSecureLogin')
+        self.assertEqual(error['data']['secretRequest'], 'QTOU_LOGIN_PASSWORD')
+        self.assertEqual(error['data']['env']['password'], 'QTOU_LOGIN_PASSWORD')
+        self.assertEqual(error['data']['env']['username'], 'QTOU_LOGIN_USERNAME')
+        self.assertIn('secret-request', error['message'])
+        self.assertIn('QTOU_LOGIN_PASSWORD', error['message'])
+        self.assertIn('宿主发起安全登录', error['message'])
+        self.assertEqual(proxy.read_token(), '')
+        self.assertNotIn('right', json.dumps(emitted, ensure_ascii=False))
+
+    def test_account_add_env_password_absent_from_all_outputs(self):
+        secret = 'env-pass-must-never-leak-xyz'
+        captured = []
+
+        def capture_emit(message):
+            captured.append(message)
+
+        def capture_log(message):
+            captured.append({'log': message})
+
+        with mock.patch.dict(os.environ, {
+            'QTOU_LOGIN_USERNAME': 'u1',
+            'QTOU_LOGIN_PASSWORD': secret,
+        }), mock.patch.object(proxy, 'emit', side_effect=capture_emit), \
+                mock.patch.object(proxy, 'log', side_effect=capture_log):
+            proxy.handle({'jsonrpc': '2.0', 'id': 32, 'method': 'tools/call',
+                          'params': {'name': 'qtou_account_add', 'arguments': {}}})
+        self.assertTrue(captured)
+        result = json.loads(captured[0]['result']['content'][0]['text'])
+        self.assertEqual(result.get('error', {}).get('code'), 'AUTH_FAILED')
+        blob = json.dumps(captured, ensure_ascii=False)
+        self.assertNotIn(secret, blob)
+        self.assertEqual(proxy.read_token(), '')
+
+    def test_account_add_ignores_url_and_site_argument_overrides(self):
+        login_url = proxy.LOGIN_URL
+        added, is_error = call('qtou_account_add', username='u1', password='right',
+                               url='http://example.invalid/login', site='evil.example')
+        self.assertFalse(is_error)
+        self.assertEqual(added['current'], 'u1')
+        self.assertEqual(FakeQtou.logins, ['u1'])
+        self.assertEqual(proxy.LOGIN_URL, login_url)
+        self.assertNotIn('example.invalid', json.dumps(added, ensure_ascii=False))
 
     def test_form_login_answer_goes_to_bridge_only(self):
         proxy.session['client_form'] = True

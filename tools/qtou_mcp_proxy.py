@@ -6,13 +6,16 @@ QTOU_MCP_URL with the current account's connector key. When there is no account 
 the user is asked for the qtou username/password, a key is signed and saved, and the request is retried,
 so the first use logs in and later uses just work.
 
-Host bots should finish a secure login collection first, then pass username/password to
-qtou_account_add, or POST them to DEFAULT_AUTH_LOGIN_URL and store agentKey as QTOU_CONNECTOR_TOKEN.
-This process cannot show the host's secure form itself. Do not depend on MCP elicitation for host bots:
-if elicitation is cancelled, returns -32001, or the user cannot see it, the bridge returns AUTH_REQUIRED
-(action=HostSecureLogin) so the host can start secure login. A webpage secure form alone does not hand
-the password to this tool. On clients that advertise elicitation (e.g. Codex), credentials may still be
-collected with elicitation/create (answer goes back to this bridge only); otherwise a macOS dialog is used.
+Host bots should collect credentials with a chat secret-request (mask box) and/or
+RequestUserForm, then call qtou_account_add. Args win over env QTOU_LOGIN_PASSWORD
+(and optional QTOU_LOGIN_USERNAME); if both are missing, clients that advertise
+elicitation (e.g. Codex) may still use elicitation/create. If none of the three are
+available, the bridge returns AUTH_REQUIRED (action=HostSecureLogin) and tells the
+host to issue secret-request for QTOU_LOGIN_PASSWORD. Do not clear those env vars
+after a successful login. A webpage secure form alone does not hand the password
+to this tool. This process cannot show the host's secure form itself. Site and
+login URL arguments are ignored; POST always goes to the configured login URL
+(default DEFAULT_AUTH_LOGIN_URL).
 
 Accounts live in ~/.qtou/accounts.json (mode 600); the current account's key is mirrored to
 ~/.qtou/connector-token for the other plugin tools. Four local tools manage them:
@@ -44,15 +47,22 @@ ACCOUNTS_PATH = qtou_shared.ACCOUNTS_PATH
 AUTH_ERROR_CODE = 10007
 MAX_LOGIN_ATTEMPTS = 3
 FORM_TIMEOUT_SECONDS = 600
+ENV_LOGIN_USERNAME = 'QTOU_LOGIN_USERNAME'
+ENV_LOGIN_PASSWORD = 'QTOU_LOGIN_PASSWORD'
 AUTH_REQUIRED_MESSAGE = (
     '未登录轻投。请由宿主发起安全登录采集账密；不要赌 MCP elicitation，不要在聊天里索要明文密码。'
-    '采集完成后调用 qtou_account_add，传入 username 与 password（不要回显）；'
+    '首选：用聊天里的 secret-request 掩码框把密码写入环境变量 QTOU_LOGIN_PASSWORD'
+    '（可选同时写入 QTOU_LOGIN_USERNAME），再调用 qtou_account_add（可不传 password）。'
+    '每个 bot 必须使用自己发起的 secret-request，不能沿用其他 bot 写入的变量。'
+    '也可以把 username 与 password 作为参数传入 qtou_account_add（不要回显）；'
     '或由宿主把账密 POST 到代签地址后，将返回的 agentKey 写入插件变量 QTOU_CONNECTOR_TOKEN（key 永不进聊天）。'
     '代签地址（轻投演示站 74，代理/宿主 POST 用，写死，禁止写成 agent.bitilinks.cn、localhost 或 127.0.0.1）：'
     + DEFAULT_AUTH_LOGIN_URL
     + '。字段：username=轻投用户名，password=轻投密码。'
-    '禁止：拷贝他人 ~/.qtou 或 qtpat_ key；打开 bot 的 box 桌面代签页；在聊天里要明文密码；'
-    '不要假设仅弹出网页安全表单就能把密码交给本工具。写入后调用 agent_health 冒烟。'
+    '优先级：工具参数 > 环境变量 > elicitation；三者都没有才返回本错误。'
+    '登录成功后不必清除环境变量。禁止：拷贝他人 ~/.qtou 或 qtpat_ key；打开 bot 的 box 桌面代签页；在聊天里要明文密码；'
+    '不要假设仅弹出网页安全表单就能把密码交给本工具；不要用工具参数覆盖代签站点或 URL。'
+    '写入后调用 agent_health 冒烟。'
 )
 
 write_lock = threading.Lock()
@@ -66,13 +76,14 @@ LOCAL_TOOLS = [
      'description': '列出本机已登录的轻投账号，并标出当前使用的账号。不返回 key。',
      'inputSchema': {'type': 'object', 'properties': {}}},
     {'name': 'qtou_account_add',
-     'description': ('添加一个轻投账号并切换为当前账号。宿主 bot 应先完成安全登录采集，再传入 username、password；'
-                     '不要在聊天里索要明文密码，也不要空参去赌 MCP elicitation。'
-                     'elicitation 取消或返回 -32001 时，错误 data 为 AUTH_REQUIRED，由宿主发起安全登录。'
-                     '代签地址为 ' + DEFAULT_AUTH_LOGIN_URL + '（禁止写成 agent.bitilinks.cn 或 localhost）。'),
+     'description': ('添加一个轻投账号并切换为当前账号。宿主应先用 secret-request 写入 QTOU_LOGIN_PASSWORD'
+                     '（可选 QTOU_LOGIN_USERNAME），或传入 username、password；参数优先于环境变量。'
+                     '每个 bot 必须使用自己发起的 secret-request。不要在聊天里索要明文密码，也不要空参去赌 MCP elicitation。'
+                     '三者都没有、elicitation 取消或返回 -32001 时，错误 data 为 AUTH_REQUIRED，提示宿主发 secret-request。'
+                     '代签地址为 ' + DEFAULT_AUTH_LOGIN_URL + '（禁止写成 agent.bitilinks.cn 或 localhost，不可用参数覆盖）。'),
      'inputSchema': {'type': 'object', 'properties': {
-         'username': {'type': 'string', 'description': '轻投用户名（来自宿主安全登录，不要从聊天正文收集）'},
-         'password': {'type': 'string', 'description': '轻投密码（来自宿主安全登录的掩码采集，不要回显）'},
+         'username': {'type': 'string', 'description': '轻投用户名（来自宿主安全登录或环境变量 QTOU_LOGIN_USERNAME，不要从聊天正文收集）'},
+         'password': {'type': 'string', 'description': '轻投密码（来自宿主安全登录或环境变量 QTOU_LOGIN_PASSWORD，不要回显）'},
      }}},
     {'name': 'qtou_account_switch',
      'description': '切换当前轻投账号，之后的轻投操作都以该账号身份进行。',
@@ -104,15 +115,44 @@ def auth_required_data():
             {'name': 'password', 'title': '轻投密码', 'secret': True},
         ],
         'submit': 'qtou_account_add',
+        'env': {
+            'password': ENV_LOGIN_PASSWORD,
+            'username': ENV_LOGIN_USERNAME,
+        },
+        'secretRequest': ENV_LOGIN_PASSWORD,
         'doNot': [
             '不要依赖 MCP elicitation；取消或报 -32001 时由宿主发起安全登录，不要再试 elicitation',
             '不要把代签地址写成 agent.bitilinks.cn（工场）或 localhost / 127.0.0.1',
+            '不要用工具参数覆盖代签站点或 URL',
             '不要拷贝他人 ~/.qtou 或 qtpat_ key',
             '不要打开 bot 的 box 桌面代签页',
             '不要在聊天里索要明文密码或 key',
             '不要假设仅弹出网页安全表单就能把密码交给本工具',
+            '不要沿用其他 bot 发起的 secret-request；每个 bot 必须自己发',
         ],
     }
+
+
+def _string_arg(arguments, name):
+    value = arguments.get(name) if isinstance(arguments, dict) else None
+    return value if isinstance(value, str) else ''
+
+
+def env_login_username():
+    value = os.environ.get(ENV_LOGIN_USERNAME)
+    return value.strip() if isinstance(value, str) else ''
+
+
+def env_login_password():
+    value = os.environ.get(ENV_LOGIN_PASSWORD)
+    return value if isinstance(value, str) else ''
+
+
+def resolve_account_add_credentials(arguments):
+    """Prefer tool arguments, then process env. Does not read elicitation or clear env."""
+    username = _string_arg(arguments, 'username').strip() or env_login_username()
+    password = _string_arg(arguments, 'password') or env_login_password()
+    return username, password
 
 
 def load_accounts():
@@ -328,8 +368,7 @@ def call_local_tool(name, arguments):
     if name == 'qtou_account_list':
         return tool_result(account_summary())
     if name == 'qtou_account_add':
-        username = (arguments.get('username') or '').strip()
-        password = arguments.get('password') if isinstance(arguments.get('password'), str) else ''
+        username, password = resolve_account_add_credentials(arguments)
         with login_lock:
             if username or password:
                 if not username or not password:
