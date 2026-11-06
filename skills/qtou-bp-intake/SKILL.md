@@ -12,7 +12,7 @@ description: >-
 
 收到BP还必须执行[BP图文完整提取](BP-VISUALS.md)：逐页检查页面图像、Logo、团队照片、表格及图片文字，按字段/子表/附件补齐并回读与网页验收；不得只提文字或把姓名生成头像当已提取照片。
 
-用户提供BP时，必须先用agent_projects_bp_schema完整盘点字段及子表，按PROJECT-ENRICHMENT.md的完整BP流程提取、确认、入库和回读；不能只填工商或简介。用户提供项目名称、公司名称或BP并要入池时，默认先执行[项目基本信息补全](PROJECT-ENRICHMENT.md)：Tavily检索/提取与Grok有出处整理，已有字段不覆盖，确认卡上带补全建议和缺口。入池仍须用户点卡确认，不替代原工商逻辑。用户确认入池后按「入池后自动补全」直接补写（bp_attach → bp_assets → profile_fill），不逐项问，经原文审核后写入并回读核验。具体执行入口和停止条件见PROJECT-ENRICHMENT.md，不能只建公司关联就结束。
+用户提供BP时，必须先用agent_projects_bp_schema完整盘点字段及子表，按PROJECT-ENRICHMENT.md的完整BP流程提取、确认、入库和回读；不能只填工商或简介。用户提供项目名称、公司名称或BP并要入池时，默认先执行[项目基本信息补全](PROJECT-ENRICHMENT.md)：Tavily检索/提取，由你自己（当前模型）核实并做有出处整理，已有字段不覆盖，确认卡上带补全建议和缺口。入池仍须用户点卡确认，不替代原工商逻辑。用户确认入池后按「入池后自动补全」直接补写（bp_attach → bp_assets → profile_fill），不逐项问，经原文审核后写入并回读核验。具体执行入口和停止条件见PROJECT-ENRICHMENT.md，不能只建公司关联就结束。
 
 ## 入池后自动补全（强制，应写尽写，不逐项问）
 
@@ -26,7 +26,7 @@ description: >-
 
 **字典字段想办法填上（行业、细分领域、轮次、币种、沟通方式等）**：材料里的说法和字典选项不完全一致时，不要直接留空——先看 `agent_projects_bp_schema` / `bp_get` 返回的该字段全部选项，选语义最接近的一项写入（如「智能制造」→「生产|加工|制造」或「高科技」），汇报里注明「按最接近归类：原文 X → 选项 Y」。只有所有选项都明显无关时才留空并写原因。币种材料没写时，服务端会按公司注册资本币种补，不用另传。
 
-主动上网补齐入池所需的全部信息：工商字段、官网、主营业务、简介、荣誉、融资、地址、联系方式等，按 [PROJECT-ENRICHMENT.md](PROJECT-ENRICHMENT.md) 两轮 Tavily 检索并提取正文。天眼查查不到时，confirm 带 `companyFallback`（Tavily + Grok，schemaVersion=1）。
+主动上网补齐入池所需的全部信息：工商字段、官网、主营业务、简介、荣誉、融资、地址、联系方式等，按 [PROJECT-ENRICHMENT.md](PROJECT-ENRICHMENT.md) 两轮 Tavily 检索并提取正文。天眼查查不到时，confirm 带 `companyFallback`（Tavily 正文 + 你自己核实，schemaVersion=1，`--model` 写你实际的模型名），不用另配 Grok。
 
 底线（任一不满足，该项不写）：
 
@@ -34,7 +34,7 @@ description: >-
 - 法律主体一致：母公司、子公司、关联公司、同名公司的数据不得写到本公司名下。
 - 已有值不覆盖（含 0/false）；要替换须另行问用户。
 - 返回 `duplicate` 时直说「重复，已经有了」，附已有记录（id、名称），不重试、不另建。
-- 私有 BP 不发给外部模型；交 Grok 的只有公开网页资料。
+- 私有 BP 不发给外部模型；核实只依据公开网页资料。
 
 做完一次性汇报：写了哪些字段及各自来源；仍空着的字段及原因（无可靠公开来源 / 主体对不上 / 冲突 / 字典不匹配 / 提取失败）。
 

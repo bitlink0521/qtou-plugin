@@ -57,9 +57,13 @@ def run(args,client=None):
      raise enrich.EnrichmentError('EVIDENCE_MISMATCH','审核证据与本轮来源/查询不一致')
    else:
     command=[sys.executable,str(Path(__file__).with_name('profile.py')),'--company',snap['companyName'],'--sources-file',str(out/'sources.json'),'--output',str(out/'evidence.json')]
-    if args.grok_credentials_file:command+=['--grok-credentials-file',str(args.grok_credentials_file)]
+    command+=['--verifier',args.verifier,'--task-output',str(out/'verify-task.json')]
+    for flag,value in (('--proposal-file',args.proposal_file),('--model',args.model),('--grok-credentials-file',args.grok_credentials_file)):
+     if value:command+=[flag,str(value)]
     result=subprocess.run(command,capture_output=True,text=True,timeout=150)
-    if result.returncode:raise enrich.EnrichmentError('GROK_FAILED','Grok整理失败，未写入；详见独立CLI脱敏输出')
+    if result.returncode:raise enrich.EnrichmentError('VERIFY_FAILED','模型核实失败，未写入；详见独立CLI脱敏输出')
+    status=json.loads(result.stdout.strip().splitlines()[-1])
+    if status.get('status')=='proposal_required':return {**status,'round':number}
     evidence=json.loads((out/'evidence.json').read_text())
    save('evidence',evidence)
    preview=client.call('agent_projects_profile_fill',{'pendingId':args.pending_id,'evidence':evidence,'confirmed':False});save('preview',preview)
@@ -79,7 +83,7 @@ def run(args,client=None):
 
 
 def main():
- p=argparse.ArgumentParser(description=__doc__);p.add_argument('--pending-id',required=True);p.add_argument('--output-dir',type=Path,required=True);p.add_argument('--sources-file',type=Path);p.add_argument('--evidence-file',type=Path);p.add_argument('--grok-credentials-file',type=Path);p.add_argument('--apply',action='store_true',help='仅在已审阅证据且用户已授权补空值时使用；不确认入池')
+ p=argparse.ArgumentParser(description=__doc__);p.add_argument('--pending-id',required=True);p.add_argument('--output-dir',type=Path,required=True);p.add_argument('--sources-file',type=Path);p.add_argument('--evidence-file',type=Path);enrich.add_verifier_arguments(p);p.add_argument('--apply',action='store_true',help='仅在已审阅证据且用户已授权补空值时使用；不确认入池')
  args=p.parse_args()
  try:r=run(args)
  except (enrich.EnrichmentError,McpError) as e:r={'status':'failed','code':e.code,'message':str(e),'completionVerified':False}
