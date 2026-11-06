@@ -135,7 +135,7 @@
 }
 ```
 
-- `document.pages` 放逐页原文；`reviewed: true` 只在逐项核对过语义后才设。
+- `document.pages` 放逐页原文，必须包含写有公司全称的页（服务端靠它核对主体，否则返回「BP正文公司主体不匹配」）；后续再补字段时也一样；`reviewed: true` 只在逐项核对过语义后才设。
 - `nature` 取 `historical_fact`（历史事实）、`plan`（计划）、`forecast`（预测）、`current_fact`（当前事实）。
 - **BP 没写披露日期照常入池**：`document.asOf` 和各字段 `asOf` 留空，内容标「未注明日期」照常写；只是不能标 `current_fact`，不能把融资计划当当前融资需求。不要用文件导出日期冒充，也不要因此停下来问用户。
 - 旧 BP 里的融资计划、员工计划、收入利润预测，不填成当前金额/员工数或实际财务表，写进历史融资描述、`financialSituation`、`financingNeeds` 并带日期和性质。

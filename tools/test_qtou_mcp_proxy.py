@@ -280,3 +280,14 @@ class ProxyTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class ImageResultTest(unittest.TestCase):
+    def test_image_results_drop_structured_content_so_images_reach_the_model(self):
+        image = {'jsonrpc': '2.0', 'id': 1, 'result': {
+            'content': [{'type': 'text', 'text': '{}'}, {'type': 'image', 'data': 'AAAA', 'mimeType': 'image/png'}],
+            'structuredContent': {'items': []}}}
+        plain = {'jsonrpc': '2.0', 'id': 2, 'result': {'content': [{'type': 'text', 'text': '{}'}], 'structuredContent': {'a': 1}}}
+        proxy.keep_images_visible([image, plain])
+        self.assertNotIn('structuredContent', image['result'])
+        self.assertEqual(plain['result']['structuredContent'], {'a': 1})

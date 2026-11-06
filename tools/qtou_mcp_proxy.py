@@ -259,6 +259,17 @@ def forward(message):
     return replies
 
 
+def keep_images_visible(replies):
+    """Codex feeds the model structuredContent when present and drops image content, so page images
+    (agent_documents_pages / agent_projects_bp_pages) never reach the model. Image results keep only content."""
+    for reply in replies:
+        result = reply.get('result') if isinstance(reply, dict) else None
+        if isinstance(result, dict) and any(isinstance(item, dict) and item.get('type') == 'image'
+                                            for item in result.get('content') or []):
+            result.pop('structuredContent', None)
+    return replies
+
+
 def tool_result(payload, is_error=False):
     return {'content': [{'type': 'text', 'text': json.dumps(payload, ensure_ascii=False)}], 'isError': is_error}
 
@@ -408,6 +419,8 @@ def handle(message):
             replies = [{'jsonrpc': '2.0', 'id': message.get('id'), 'result': tool_result(
                 {'error': {'code': 'USER_DECLINED', 'message': '用户在确认卡上没有同意，本次未写入', 'tool': params['name']}},
                 is_error=True)}]
+        elif method == 'tools/call':
+            replies = keep_images_visible(forward(message))
         else:
             replies = forward(message)
     except LoginCancelled:

@@ -29,7 +29,7 @@ description: >-
 8. **工商和档案字段**：读 [ENRICHMENT.md](ENRICHMENT.md)，用 `workflow.py` 联网检索、核实、补写工商与公司档案空字段。
 9. **回读**：`agent_projects_bp_get({ pendingId })` 和 `agent_projects_profile_get({ pendingId })`。
 10. **完成标准（全部满足才结束）**：
-    - 团队人数 = BP 里的核心成员人数，每人有职务和履历；BP 有照片的成员有头像。
+    - 团队人数 = BP 里的核心成员人数，每人有职务和履历；BP 有照片的成员，头像是从 BP 裁的真照片（`isAutoGenerate` 为 `"0"` 的是姓名占位图，不算）。
     - BP 里有内容的字段都已写入，或列在缺口里并写明原因。
     - BP 附件有 `fileId`。
     - 工商与档案字段已走完第 8 步，剩余空字段都有原因。
