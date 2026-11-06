@@ -1,5 +1,7 @@
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import threading
 import unittest
@@ -149,7 +151,8 @@ class ProxyTests(unittest.TestCase):
         emitted = []
         with mock.patch.object(proxy, 'ask_credentials', side_effect=proxy.LoginCancelled), \
                 mock.patch.object(proxy, 'emit', side_effect=emitted.append):
-            proxy.handle({'jsonrpc': '2.0', 'id': 3, 'method': 'tools/list'})
+            proxy.handle({'jsonrpc': '2.0', 'id': 3, 'method': 'tools/call',
+                          'params': {'name': 'agent_health', 'arguments': {}}})
         error = emitted[0]['error']
         self.assertEqual(error['code'], -32001)
         self.assertIn('宿主发起安全登录', error['message'])
@@ -343,7 +346,8 @@ class ProxyTests(unittest.TestCase):
                              'result': {'action': 'accept', 'content': {'username': 'u1', 'password': 'right'}}})
 
         with mock.patch.object(proxy, 'emit', side_effect=client):
-            proxy.handle({'jsonrpc': '2.0', 'id': 5, 'method': 'tools/list'})
+            proxy.handle({'jsonrpc': '2.0', 'id': 5, 'method': 'tools/call',
+                          'params': {'name': 'agent_health', 'arguments': {}}})
         self.assertEqual(sent[0]['method'], 'elicitation/create')
         self.assertEqual(set(sent[0]['params']['requestedSchema']['required']), {'username', 'password'})
         self.assertEqual(sent[1]['id'], 5)
@@ -474,3 +478,82 @@ class ImageResultTest(unittest.TestCase):
         proxy.keep_images_visible([image, plain])
         self.assertNotIn('structuredContent', image['result'])
         self.assertEqual(plain['result']['structuredContent'], {'a': 1})
+
+
+class UnauthenticatedStdioDiscoveryTests(unittest.TestCase):
+    """Spawn the real stdio proxy with a blank HOME and no login env."""
+
+    LOCAL_NAMES = {
+        'qtou_account_list', 'qtou_account_add', 'qtou_account_switch', 'qtou_account_logout',
+    }
+
+    def test_tools_list_without_token_returns_local_tools_and_not_32001(self):
+        proxy_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'qtou_mcp_proxy.py')
+        home = tempfile.TemporaryDirectory()
+        env = {
+            'HOME': home.name,
+            'PATH': os.environ.get('PATH', '/usr/bin:/bin'),
+            'PYTHONUNBUFFERED': '1',
+            'LC_ALL': os.environ.get('LC_ALL', 'C'),
+        }
+        self.assertNotIn('QTOU_LOGIN_PASSWORD', env)
+        self.assertNotIn('QTOU_LOGIN_USERNAME', env)
+        self.assertNotIn('QTOU_CONNECTOR_TOKEN', env)
+        proc = subprocess.Popen(
+            [sys.executable, proxy_path],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+            text=True,
+            bufsize=1,
+        )
+
+        def send(message):
+            proc.stdin.write(json.dumps(message, ensure_ascii=False) + '\n')
+            proc.stdin.flush()
+
+        def recv(timeout=15):
+            holder = []
+
+            def target():
+                holder.append(proc.stdout.readline())
+
+            thread = threading.Thread(target=target)
+            thread.daemon = True
+            thread.start()
+            thread.join(timeout)
+            if thread.is_alive():
+                self.fail('proxy did not reply within %s seconds' % timeout)
+            raw = holder[0] if holder else ''
+            self.assertTrue(raw, 'proxy closed stdout without a reply')
+            return json.loads(raw)
+
+        try:
+            send({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize',
+                  'params': {'protocolVersion': '2024-11-05', 'capabilities': {},
+                             'clientInfo': {'name': 'toolslist-regress', 'version': '0'}}})
+            initialized = recv()
+            self.assertNotEqual((initialized.get('error') or {}).get('code'), -32001)
+            self.assertIn('result', initialized)
+            send({'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list', 'params': {}})
+            listed = recv()
+            self.assertNotIn('error', listed)
+            self.assertNotEqual((listed.get('error') or {}).get('code'), -32001)
+            tools = listed['result']['tools']
+            names = [tool['name'] for tool in tools]
+            self.assertEqual(set(names), self.LOCAL_NAMES)
+            self.assertEqual(len(tools), 4)
+        finally:
+            for stream in (proc.stdin, proc.stdout, proc.stderr):
+                if stream:
+                    try:
+                        stream.close()
+                    except Exception:
+                        pass
+            proc.kill()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+            home.cleanup()

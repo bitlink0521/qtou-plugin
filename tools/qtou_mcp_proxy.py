@@ -513,7 +513,15 @@ def handle(message):
             replies = [{'jsonrpc': '2.0', 'id': message.get('id'),
                         'result': call_local_tool(params['name'], params.get('arguments') or {})}]
         elif method == 'tools/list':
-            replies = with_local_tools(forward(message))
+            # Discovery must not block on login: return local account tools only until a key exists.
+            if not read_token():
+                replies = [{'jsonrpc': '2.0', 'id': message.get('id'),
+                            'result': {'tools': list(LOCAL_TOOLS)}}]
+            else:
+                replies = with_local_tools(forward(message))
+        elif method in ('resources/list', 'prompts/list') and not read_token():
+            collection = 'resources' if method == 'resources/list' else 'prompts'
+            replies = [{'jsonrpc': '2.0', 'id': message.get('id'), 'result': {collection: []}}]
         elif (method == 'tools/call' and params.get('name') in CONFIRM_TOOLS and session['client_form']
               and not confirmed_by_user(params['name'], params.get('arguments') or {})):
             replies = [{'jsonrpc': '2.0', 'id': message.get('id'), 'result': tool_result(
