@@ -181,8 +181,15 @@ def reset_upstream():
 
 
 def emit(message):
+    """Reply using the same stdio framing the client used on its last request."""
+    body = json.dumps(message, ensure_ascii=False)
     with write_lock:
-        sys.stdout.write(json.dumps(message, ensure_ascii=False) + '\n')
+        if session.get('stdio_framed'):
+            raw = body.encode('utf-8')
+            sys.stdout.write('Content-Length: %d\r\n\r\n' % len(raw))
+            sys.stdout.write(body)
+        else:
+            sys.stdout.write(body + '\n')
         sys.stdout.flush()
 
 
@@ -555,9 +562,36 @@ def route(message):
     threading.Thread(target=handle, args=(message,), daemon=True).start()
 
 
-def serve():
-    for line in sys.stdin:
-        line = line.strip()
+def read_stdio_message():
+    """Read one JSON-RPC message from stdin: Content-Length framed or NDJSON."""
+    while True:
+        header = sys.stdin.readline()
+        if header == '':
+            return None
+        if header in ('\n', '\r\n'):
+            continue
+        if header.lower().startswith('content-length:'):
+            session['stdio_framed'] = True
+            try:
+                length = int(header.split(':', 1)[1].strip())
+            except ValueError:
+                log('bad Content-Length header')
+                continue
+            while True:
+                line = sys.stdin.readline()
+                if line in ('', '\n', '\r\n'):
+                    break
+            raw = sys.stdin.read(length)
+            if not raw:
+                return None
+            try:
+                message = json.loads(raw)
+            except ValueError:
+                log('ignored a non-JSON framed body')
+                continue
+            return message if isinstance(message, dict) else None
+        session['stdio_framed'] = False
+        line = header.strip()
         if not line:
             continue
         try:
@@ -565,8 +599,15 @@ def serve():
         except ValueError:
             log('ignored a non-JSON line')
             continue
-        if isinstance(message, dict):
-            route(message)
+        return message if isinstance(message, dict) else None
+
+
+def serve():
+    while True:
+        message = read_stdio_message()
+        if message is None:
+            break
+        route(message)
 
 
 def main():
