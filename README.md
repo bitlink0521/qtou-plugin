@@ -14,11 +14,11 @@
 
 默认代签登录地址（轻投演示站 74，写死）：`http://113.250.189.74:18081/api/v1/agent/auth/login`。可用环境变量 `QTOU_LOGIN_URL` 覆盖，但**禁止**写成 `agent.bitilinks.cn`（那是工场，不是轻投）、`localhost` 或 `127.0.0.1`（安全表单会拒绝）。MCP 默认地址是 `http://113.250.189.74:18081/api/v1/agent/mcp`，可用 `QTOU_MCP_URL` 覆盖，同样不要写成工场或 localhost。
 
-**Grok Bot 等宿主 bot（默认路径）**：未登录 / 401 / 第一次安装时，由宿主发起安全登录采集轻投用户名与密码。不要先调空的 `qtou_account_add`，也不要赌 MCP elicitation；若 elicitation 被取消、报 `-32001`，或用户看不到表单，立刻改由宿主安全登录。插件自己弹不出宿主的安全采集控件；未登录时可能返回 JSON-RPC `-32001`，`error.data` 为 `AUTH_REQUIRED`（`action=HostSecureLogin`），宿主应按此处理。仅弹出网页类安全表单并不等于密码已交给插件。
+**Grok Bot 等宿主 bot（默认路径）**：未登录 / 401 / 第一次安装时，由宿主发起安全登录采集轻投用户名与密码。不要先调空的 `qtou_account_add` 去赌 MCP elicitation；若 elicitation 被取消、报 `-32001`，或用户看不到表单，立刻改由宿主安全登录。插件自己弹不出宿主的安全采集控件；未登录时可能返回 JSON-RPC `-32001`，`error.data` 为 `AUTH_REQUIRED`（`action=HostSecureLogin`，含 `secretRequest=QTOU_LOGIN_PASSWORD`），宿主应按此处理。仅弹出网页类安全表单并不等于密码已交给插件；RequestUserForm 可与 secret-request 并存，但不能代替交密。
 
-采集完成后：调用 `qtou_account_add({ username, password })`（stdio 代理会 POST 到写死的代签地址并写入本机）；若连接器是 HTTP，也可由宿主把账密 POST 到上述代签地址，将返回的 `agentKey` 写入插件变量 `QTOU_CONNECTOR_TOKEN`（key 永不进聊天）。然后调用 `agent_health` 冒烟。
+首登流程：先由**当前这个 bot** 发聊天里的 `secret-request` 掩码框，把密码写入环境变量 `QTOU_LOGIN_PASSWORD`（可选同时写入 `QTOU_LOGIN_USERNAME`）。每个 bot 必须用自己发的 secret-request，不能沿用其他 bot 的变量。填写后若 stdio 代理早已启动，需要重装/重连该 MCP，代理才能读到新变量。然后再调用 `qtou_account_add`（可不传 `password`；若同时传了参数，参数优先）。代理按 参数 > 环境变量 > elicitation 取凭据，三者都没有则返回 `AUTH_REQUIRED` 并提示使用 secret-request。stdio 代理会 POST 到写死的代签地址并写入本机，**不**用工具参数覆盖站点和 URL，登录成功后也不清除环境变量；密码不进日志、报错和返回值。若连接器是 HTTP，也可由宿主把账密 POST 到上述代签地址，将返回的 `agentKey` 写入插件变量 `QTOU_CONNECTOR_TOKEN`（key 永不进聊天）。然后调用 `agent_health` 冒烟。
 
-**Codex**：没有可用账号时，启动器仍可通过对话内 MCP 表单（elicitation）登录；不支持表单的客户端弹 macOS 对话框。这是补充路径，不是宿主 bot 的默认路径。
+**Codex**：没有可用账号、没有传入参数、也没有上述环境变量时，启动器仍可通过对话内 MCP 表单（elicitation）登录；不支持表单的客户端弹 macOS 对话框。这是补充路径，不是宿主 bot 的默认路径。
 
 登录后由插件自己写入本机 `~/.qtou/`，以后直接用，失效会再请你登录。
 
@@ -47,7 +47,7 @@ codex plugin add qtou@qtou-plugin
 
 在 **Connect Apps / 插件市场** 搜索并安装 **qtou**（市场条目 id `85237826`；也可让 bot 执行安装）。
 
-装好后连接器走本机 `tools/qtou_mcp_proxy.py`（stdio）：首次使用时由宿主 bot 发起安全登录，再调用 `qtou_account_add({username,password})` 写入本机 `~/.qtou/`；不要赌 MCP elicitation，不要手填 `qtpat_…`，不要拷贝 `~/.qtou`，不要打开 bot 的 box 桌面代签。代签地址见上文，写死为演示站 74。
+装好后连接器走本机 `tools/qtou_mcp_proxy.py`（stdio）：首次使用时由宿主 bot 先发 secret-request（变量名 `QTOU_LOGIN_PASSWORD`，每个 bot 自己发；可与 RequestUserForm 并存），再调用 `qtou_account_add` 写入本机 `~/.qtou/`；不要赌 MCP elicitation，不要手填 `qtpat_…`，不要拷贝 `~/.qtou`，不要打开 bot 的 box 桌面代签。代签地址见上文，写死为演示站 74，不允许用参数覆盖。
 
 手动配 HTTP 的可继续用根目录 `mcp.json`（Bearer `${QTOU_CONNECTOR_TOKEN}`）。
 
