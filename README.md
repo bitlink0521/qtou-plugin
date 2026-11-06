@@ -16,7 +16,7 @@
 
 支持多个账号，直接对 AI 说：「添加轻投账号」「切换到 xx 账号」「现在用的哪个轻投账号」「退出 xx 账号」。
 
-需要本机有 `python3`（Mac 第一次用时按提示安装开发者工具即可）。
+需要本机 `python3` **≥ 3.7**（`tools/qtou_mcp_proxy.py` 使用了 `subprocess.run(..., capture_output=True, text=True)`，二者均为 3.7 引入；语法用 `ast.parse(..., feature_version=(3,7))` 可通过。Mac 若提示缺命令，按系统提示装开发者工具即可）。
 
 入池时天眼查查不到公司，会由当前使用插件的 AI 联网搜公开资料（有 Tavily 用 Tavily，没有就用它自带的搜索并打开网页取正文）、自己核实后建档，不用另配 Grok。无人值守脚本要用 Tavily key 或 Grok API 时，分别放到 `~/.qtou/tavily-key`、`~/.qtou/grok-credentials`（权限设成 600），插件自动读取，不用在聊天里提供。
 
@@ -31,9 +31,18 @@ codex plugin add qtou@qtou-plugin
 
 更新：`codex plugin marketplace upgrade qtou-plugin`
 
-### Grok Bot（桌面客户端）
+### Grok Bot
 
-插件 → **Add custom plugin** → 填 `https://github.com/bitlink0521/qtou-plugin`。装好后新开会话即可。
+前置：本机 `python3` ≥ 3.7（同上）。
+
+在 **Connect Apps / 插件市场** 搜索并安装 **qtou**（市场条目 id `85237826`；也可让 bot 执行安装）。
+
+装好后连接器走本机 `tools/qtou_mcp_proxy.py`（stdio）：首次用时弹表单登录，凭据存 `~/.qtou/`，不要手填 `qtpat_…`。
+
+手动配 HTTP 的可继续用根目录 `mcp.json`（Bearer `${QTOU_CONNECTOR_TOKEN}`）。
+
+市场入口备忘（不确定桌面端具体菜单名时，把下面链接发给 bot 或浏览器打开）：
+`https://cursor.com/grok-bot/link/v1/marketplace?tab=plugins`
 
 ### WorkBuddy
 
@@ -74,7 +83,7 @@ grok plugin install https://github.com/bitlink0521/qtou-plugin --trust
   - `qtou-bp-intake`（轻投：BP 入池）：确认卡、入池后自动补全（含 `PROJECT-ENRICHMENT.md`、`BP-VISUALS.md`）
   - `qtou-dd-report`（轻投：尽调报告）：检索文档、扫描件看图读、写初稿（含 `DD-REPORT-WRITING.md`）
   - `qtou-risk-alert`（轻投：投后风险预警）：分级、出处、确认后回写
-- **MCP**：服务端的轻投工具，加上 4 个账号工具（`qtou_account_list / add / switch / logout`）。Codex、Grok、WorkBuddy 都经 `tools/qtou_mcp_proxy.py` 连接（负责登录和多账号）；Cursor 用 `mcp.json` 直连。
+- **MCP**：服务端的轻投工具，加上 4 个账号工具（`qtou_account_list / add / switch / logout`）。Codex / Grok Bot 市场 / WorkBuddy 经 `tools/qtou_mcp_proxy.py`（登录与多账号）；Cursor 仍用根目录 `mcp.json` HTTP 直连（需 `QTOU_CONNECTOR_TOKEN`）。
 - **辅助脚本**：`tools/project-enrichment`（字段补全）、`tools/risk-patrol`（自动巡检）
 - **Logo**：`assets/logo.png`
 
