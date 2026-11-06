@@ -149,13 +149,48 @@ class ProxyTests(unittest.TestCase):
         error = emitted[0]['error']
         self.assertEqual(error['code'], -32001)
         self.assertIn('RequestUserForm', error['message'])
+        self.assertIn('qtou.cn', error['message'])
+        self.assertIn('BrowserSecureFill', error['message'])
         self.assertIn(proxy.DEFAULT_AUTH_LOGIN_URL, error['message'])
         self.assertIn('agent.bitilinks.cn', error['message'])
         self.assertEqual(error['data']['code'], 'AUTH_REQUIRED')
         self.assertEqual(error['data']['action'], 'RequestUserForm')
+        self.assertEqual(error['data']['kind'], 'login')
+        self.assertEqual(error['data']['site'], 'qtou.cn')
         self.assertEqual(error['data']['loginUrl'], proxy.DEFAULT_AUTH_LOGIN_URL)
-        self.assertEqual(error['data']['submit'], 'qtou_account_add')
+        self.assertEqual(error['data']['secretDelivery'], 'BrowserSecureFill')
+        self.assertNotIn('submit', error['data'])
+        self.assertIn('username', [field['name'] for field in error['data']['fields']])
+        self.assertIn('password', [field['name'] for field in error['data']['fields']])
+        self.assertNotEqual(error['data']['site'], error['data']['loginUrl'])
+        joined = json.dumps(error['data'], ensure_ascii=False)
+        self.assertNotIn('localhost', error['data']['site'])
+        self.assertNotIn('127.0.0.1', error['data']['site'])
+        self.assertNotIn('agent.bitilinks.cn', error['data']['site'])
+        self.assertNotRegex(error['data']['site'], r'\d+\.\d+\.\d+\.\d+')
+        self.assertIn('BrowserSecureFill', joined)
         self.assertEqual(proxy.read_token(), '')
+
+    def test_account_add_schema_always_documents_username_and_password(self):
+        tool = next(item for item in proxy.LOCAL_TOOLS if item['name'] == 'qtou_account_add')
+        properties = tool['inputSchema']['properties']
+        self.assertEqual(set(properties), {'username', 'password'})
+        self.assertIn('qtou.cn', tool['description'])
+        self.assertIn('BrowserSecureFill', tool['description'])
+        self.assertIn('RequestUserForm', tool['description'])
+        self.assertNotIn('再把 username、password 传给本工具', tool['description'])
+        self.assertIn('BrowserSecureFill', properties['password']['description'])
+
+    def test_auth_required_form_site_is_qtou_cn_not_the_login_post(self):
+        data = proxy.auth_required_data()
+        self.assertEqual(data['site'], 'qtou.cn')
+        self.assertEqual(data['kind'], 'login')
+        self.assertEqual(data['action'], 'RequestUserForm')
+        self.assertEqual(data['loginUrl'], 'http://113.250.189.74:18081/api/v1/agent/auth/login')
+        self.assertEqual(data['secretDelivery'], 'BrowserSecureFill')
+        text = json.dumps(data, ensure_ascii=False)
+        self.assertIn('不要先无参数调用 qtou_account_add', text)
+        self.assertIn('不要把 RequestUserForm 的密码抄进 MCP 参数', text)
 
     def test_default_login_url_is_demo_74_not_factory_or_localhost(self):
         self.assertEqual(proxy.DEFAULT_AUTH_LOGIN_URL,

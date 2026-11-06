@@ -6,13 +6,16 @@ QTOU_MCP_URL with the current account's connector key. When there is no account 
 the user is asked for the qtou username/password, a key is signed and saved, and the request is retried,
 so the first use logs in and later uses just work.
 
-Host bots such as Grok Bot should collect credentials with their own secure chat form (RequestUserForm:
-username + masked password) and pass them to qtou_account_add, or POST them to DEFAULT_AUTH_LOGIN_URL.
-This process cannot show RequestUserForm itself. Do not depend on MCP elicitation: if elicitation is
-cancelled, returns -32001, or the user cannot see it, the bridge returns AUTH_REQUIRED so the host can
-show that form immediately. On clients that advertise elicitation, credentials may still be collected
-with elicitation/create (the answer goes back to this bridge only, never to the model or the chat);
-otherwise a macOS dialog is used. A client that signs the key itself can pass it in QTOU_CONNECTOR_TOKEN.
+Host bots such as Grok Bot must pop RequestUserForm (kind=login, site=qtou.cn) before any login tool
+call. This process cannot show that form. The form site is the hostname qtou.cn — not an IP, not
+localhost, and not agent.bitilinks.cn. DEFAULT_AUTH_LOGIN_URL is only the proxy's login POST.
+
+Platform limit: RequestUserForm secrets are delivered only to BrowserSecureFill. They are not returned
+to the model and must not be copied into qtou_account_add arguments, chat, or any other channel. Do not
+work around that by opening a bot-box desktop, copying ~/.qtou, or asking for a plaintext password.
+On clients that actually show MCP elicitation, an empty qtou_account_add may still collect credentials
+inside this bridge (never to the model). That path is optional. If it is cancelled or returns -32001,
+the bridge returns AUTH_REQUIRED so the host pops RequestUserForm immediately instead of retrying.
 
 Accounts live in ~/.qtou/accounts.json (mode 600); the current account's key is mirrored to
 ~/.qtou/connector-token for the other plugin tools. Four local tools manage them:
@@ -44,16 +47,16 @@ ACCOUNTS_PATH = qtou_shared.ACCOUNTS_PATH
 AUTH_ERROR_CODE = 10007
 MAX_LOGIN_ATTEMPTS = 3
 FORM_TIMEOUT_SECONDS = 600
+FORM_SITE = 'qtou.cn'
 AUTH_REQUIRED_MESSAGE = (
-    '未登录轻投。请立刻在用户自己的聊天里弹出安全表单（RequestUserForm），'
-    '不要再尝试 MCP elicitation，也不要在聊天里索要明文密码。'
-    '代签登录地址（轻投演示站 74，必须用这个地址，禁止写成 agent.bitilinks.cn、localhost 或 127.0.0.1）：'
-    + DEFAULT_AUTH_LOGIN_URL
-    + '。表单字段：username=轻投用户名，password=轻投密码（掩码）。'
-    '拿到表单结果后调用 qtou_account_add，传入 username 与 password（不要回显）；'
-    '或由宿主把表单结果 POST 到上述地址，将返回的 agentKey 写入插件变量 QTOU_CONNECTOR_TOKEN（key 永不进聊天）。'
-    '禁止：拷贝他人 ~/.qtou 或 qtpat_ key；打开 bot 的 box 桌面代签页；在聊天里要明文密码。'
-    '写入后调用 agent_health 冒烟。'
+    '未登录轻投。第一步立刻弹出 RequestUserForm(kind=login, site=qtou.cn)，'
+    '不要先无参数调用 qtou_account_add，也不要重试 MCP elicitation'
+    '（Grok Bot 不展示 elicitation，会得到 -32001 cancelled）。'
+    '表单 site 必须是 qtou.cn，禁止写成 IP、localhost、127.0.0.1 或 agent.bitilinks.cn。'
+    '代签 POST（不是表单 site，禁止当成 site）：' + DEFAULT_AUTH_LOGIN_URL + '。'
+    '平台限制：RequestUserForm 的密码只进入 BrowserSecureFill，不会作为 MCP 参数返回；'
+    '不要把密码写入 qtou_account_add、聊天或其他工具。'
+    '不要打开 bot 的 box 桌面代签，不要拷贝 ~/.qtou 或 qtpat_ key，不要在聊天里要明文密码。'
 )
 
 write_lock = threading.Lock()
@@ -67,15 +70,37 @@ LOCAL_TOOLS = [
      'description': '列出本机已登录的轻投账号，并标出当前使用的账号。不返回 key。',
      'inputSchema': {'type': 'object', 'properties': {}}},
     {'name': 'qtou_account_add',
-     'description': ('添加一个轻投账号并切换为当前账号。优先由宿主 bot 在用户自己的聊天里弹出安全表单'
-                     '（RequestUserForm）收取用户名和掩码密码，再把 username、password 传给本工具；'
-                     '不要在聊天里索要明文密码。不传参数时，支持 MCP elicitation 的客户端会弹表单；'
-                     '若 elicitation 被取消、报 -32001 或用户看不到，立刻改走 RequestUserForm。'
-                     '代签地址为 ' + DEFAULT_AUTH_LOGIN_URL + '（禁止写成 agent.bitilinks.cn 或 localhost）。'),
-     'inputSchema': {'type': 'object', 'properties': {
-         'username': {'type': 'string', 'description': '轻投用户名（来自 RequestUserForm，不要从聊天正文收集）'},
-         'password': {'type': 'string', 'description': '轻投密码（来自安全表单的掩码字段，不要回显）'},
-     }}},
+     'description': (
+         '添加一个轻投账号并切换为当前账号。'
+         'Grok Bot / Cursor bot 未登录时不要调用本工具：第一步是宿主弹出 '
+         'RequestUserForm(kind=login, site=qtou.cn)。site 必须是 qtou.cn，'
+         '不要写成 IP、localhost、127.0.0.1 或 agent.bitilinks.cn。'
+         '代签 POST 是 ' + DEFAULT_AUTH_LOGIN_URL + '，那是代理的 POST 地址，不是表单 site。'
+         '平台限制：RequestUserForm 的密码只进入 BrowserSecureFill，不会作为 MCP 参数返回；'
+         '不要把密码写入本工具、聊天或其他通道，不要打开 bot box 桌面代签，不要拷贝 ~/.qtou。'
+         'inputSchema 始终包含 username 与 password。宿主若把参数缓存成 properties:{}，'
+         '那是旧缓存，不要据此无参数调用。无参数只留给确实会展示 MCP elicitation 的客户端'
+         '（可选回退，凭据只进代理、不进模型）。Grok Bot 上 elicitation 不出现，调用以 -32001 结束。'
+         '收到 -32001 或 AUTH_REQUIRED 时立刻改弹 RequestUserForm，不要重试 elicitation。'
+     ),
+     'inputSchema': {
+         'type': 'object',
+         'description': (
+             'properties 始终包含 username 与 password。缓存成 properties:{} 时也不要无参数调用。'
+             'Grok Bot 不要填写 password：RequestUserForm 的密钥只到 BrowserSecureFill，模型没有这份值。'
+             '只有会展示 MCP elicitation 的客户端可以不传参数，由代理自己收凭据。'
+         ),
+         'properties': {
+             'username': {'type': 'string', 'description': '轻投用户名。不要从聊天正文收集。'},
+             'password': {
+                 'type': 'string',
+                 'description': (
+                     '轻投密码。模型拿不到 RequestUserForm 的密钥（只到 BrowserSecureFill），'
+                     '不要从聊天或表单结果抄进这个参数。'
+                 ),
+             },
+         },
+     }},
     {'name': 'qtou_account_switch',
      'description': '切换当前轻投账号，之后的轻投操作都以该账号身份进行。',
      'inputSchema': {'type': 'object', 'properties': {'username': {'type': 'string', 'description': '要切换到的账号用户名'}},
@@ -100,15 +125,24 @@ def auth_required_data():
     return {
         'code': 'AUTH_REQUIRED',
         'action': 'RequestUserForm',
+        'kind': 'login',
+        'site': FORM_SITE,
         'loginUrl': DEFAULT_AUTH_LOGIN_URL,
         'fields': [
             {'name': 'username', 'title': '轻投用户名', 'secret': False},
             {'name': 'password', 'title': '轻投密码', 'secret': True},
         ],
-        'submit': 'qtou_account_add',
+        'secretDelivery': 'BrowserSecureFill',
+        'gap': (
+            'RequestUserForm 的密码只进入 BrowserSecureFill，不会作为 MCP 参数返回，'
+            '因此不能把表单密钥写入 qtou_account_add。不要改要聊天明文、打开 bot box 桌面或拷贝 ~/.qtou。'
+        ),
         'doNot': [
-            '不要依赖 MCP elicitation；取消、报 -32001 或用户看不到时立刻弹 RequestUserForm',
-            '不要把站点写成 agent.bitilinks.cn（工场）或 localhost / 127.0.0.1（安全表单会拒）',
+            '不要先无参数调用 qtou_account_add；那会走 MCP elicitation，Grok Bot 不展示并返回 -32001',
+            '收到 -32001 或 AUTH_REQUIRED 时立刻弹 RequestUserForm，不要重试 elicitation',
+            'RequestUserForm 的 site 必须是 qtou.cn，不要写成 IP、localhost、127.0.0.1 或 agent.bitilinks.cn',
+            'loginUrl 只是代签 POST，不是表单 site',
+            '不要把 RequestUserForm 的密码抄进 MCP 参数或聊天（密钥只到 BrowserSecureFill）',
             '不要拷贝他人 ~/.qtou 或 qtpat_ key',
             '不要打开 bot 的 box 桌面代签页',
             '不要在聊天里索要明文密码或 key',

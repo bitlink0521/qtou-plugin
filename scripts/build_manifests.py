@@ -48,9 +48,10 @@ def build(meta):
         '.mcp.json': {'mcpServers': {meta['name']: {'command': 'python3', 'args': ['${CLAUDE_PLUGIN_ROOT}/' + meta['proxy']]}}},
         # Grok Bot marketplace reads .cursor-plugin (empiric); point it at stdio proxy.
         # Root mcp.json stays HTTP for Cursor 直连 / 手动 HTTP. variables dropped: InstallPlugin
-        # values do not populate QTOU_CONNECTOR_TOKEN on Grok; the host should pop
-        # RequestUserForm and call qtou_account_add (see skills/qtou-connect). The proxy
-        # may still use elicitation as a fallback on clients that support it.
+        # values do not populate QTOU_CONNECTOR_TOKEN on Grok. The host pops
+        # RequestUserForm(kind=login, site=qtou.cn) first (see skills/qtou-connect).
+        # That secret only reaches BrowserSecureFill, not MCP args. Elicitation stays
+        # an optional fallback for clients that actually show it.
         '.cursor-plugin/plugin.json': dict(common, logo=logo, mcpServers='./.grok-mcp.json'),
         '.cursor-plugin/marketplace.json': {'name': meta['marketplace'], 'owner': meta['author'],
                                             'metadata': {'description': '轻投插件市场'}, 'plugins': [marketplace_entry]},

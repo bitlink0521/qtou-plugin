@@ -12,17 +12,21 @@
 
 ## 登录
 
-默认代签登录地址（轻投演示站 74，写死）：`http://113.250.189.74:18081/api/v1/agent/auth/login`。可用环境变量 `QTOU_LOGIN_URL` 覆盖，但**禁止**写成 `agent.bitilinks.cn`（那是工场，不是轻投）、`localhost` 或 `127.0.0.1`（安全表单会拒绝）。MCP 默认地址是 `http://113.250.189.74:18081/api/v1/agent/mcp`，可用 `QTOU_MCP_URL` 覆盖，同样不要写成工场或 localhost。
+新 bot 未登录、没有账号、401、`AUTH_REQUIRED`，或用户说要登录时：**第一步**弹出 RequestUserForm。
 
-**Grok Bot 等宿主 bot（默认路径）**：未登录 / 401 / 第一次安装时，直接在用户自己的聊天里弹出安全表单（RequestUserForm），收取轻投用户名 + 掩码密码。不要先走、也不要依赖 MCP elicitation；若 elicitation 被取消、报 `-32001`，或用户说看不到表单，立刻改弹同一张安全表单。插件自己无法调用 RequestUserForm，因此未登录时会返回 JSON-RPC `-32001`，错误信息与 `data` 里带 `AUTH_REQUIRED`、代签地址和表单字段，宿主应按此弹表。
+- `kind`: `login`
+- `site`: `qtou.cn`（不是 IP，不是 `localhost` / `127.0.0.1`，不是 `agent.bitilinks.cn`）
+- 字段：轻投用户名、轻投密码（掩码）
 
-拿到表单结果后：调用 `qtou_account_add({ username, password })`（stdio 代理会代签并写入本机）；若连接器是 HTTP，也可由宿主把表单结果 POST 到上述代签地址，将返回的 `agentKey` 写入插件变量 `QTOU_CONNECTOR_TOKEN`（key 永不进聊天）。然后调用 `agent_health` 冒烟。
+代签 POST（代理自己用，**不是**表单 site）：`http://113.250.189.74:18081/api/v1/agent/auth/login`。`QTOU_LOGIN_URL` 只覆盖这个 POST。MCP 默认地址是 `http://113.250.189.74:18081/api/v1/agent/mcp`，可用 `QTOU_MCP_URL` 覆盖。两个地址都不要写成工场或 localhost，也不要填进表单 site。
 
-**Codex**：没有可用账号时，启动器仍可通过对话内 MCP 表单（elicitation）登录；不支持表单的客户端弹 macOS 对话框。这是补充路径，不是 Grok Bot 的默认路径。
+不要先无参数调用 `qtou_account_add`。那会走 MCP elicitation；Grok Bot 不展示，返回 `-32001` cancelled。`qtou_account_add` 的 schema 始终有 `username` 和 `password`。工具列表若被缓存成 `properties: {}`，仍不要无参数调用。
 
-登录后由插件自己写入本机 `~/.qtou/`，以后直接用，失效会再请你登录。
+**平台限制：** RequestUserForm 的密码只进入 BrowserSecureFill，不会回到模型，也不能写入 `qtou_account_add` 或其他 MCP 参数。不要为此在聊天里要明文密码，不要打开 bot 的 box 桌面代签，不要拷贝 `~/.qtou` 或 `qtpat_…` key。插件补不上这条链路；弹表后登录仍未完成，就说明缺口并停止。
 
-禁止：在聊天里索要明文密码或 `qtpat_…` key；拷贝他人的 `~/.qtou` 或 key 文件；打开 bot 的 box 桌面去完成代签；把登录站点写成 `agent.bitilinks.cn`、`localhost` 或 `127.0.0.1`。
+收到 `-32001` 或 `AUTH_REQUIRED`：不要重试 elicitation。`error.data` 含 `action=RequestUserForm`、`kind=login`、`site=qtou.cn`、`loginUrl`（代签 POST）、`fields`、`secretDelivery=BrowserSecureFill`。按此再弹同一张表。
+
+**Codex 等会展示 elicitation 的客户端**：无参数 `qtou_account_add` 仍可由启动器自己收凭据（不进聊天）；不支持表单时弹 macOS 对话框。这是可选回退，不是 Grok Bot 的第一步。登录成功后由插件写入本机 `~/.qtou/`。
 
 支持多个账号，直接对 AI 说：「添加轻投账号」「切换到 xx 账号」「现在用的哪个轻投账号」「退出 xx 账号」。
 
@@ -47,7 +51,7 @@ codex plugin add qtou@qtou-plugin
 
 在 **Connect Apps / 插件市场** 搜索并安装 **qtou**（市场条目 id `85237826`；也可让 bot 执行安装）。
 
-装好后连接器走本机 `tools/qtou_mcp_proxy.py`（stdio）：首次使用时由宿主 bot 在用户聊天里弹安全表单（RequestUserForm）登录，不要依赖 MCP elicitation；表单结果交给 `qtou_account_add` 写入本机 `~/.qtou/`。不要手填 `qtpat_…`，不要拷贝 `~/.qtou`，不要打开 bot 的 box 桌面代签。代签地址见上文，写死为演示站 74。
+装好后连接器走本机 `tools/qtou_mcp_proxy.py`（stdio）。首次使用时宿主先弹 RequestUserForm（`kind=login`，`site=qtou.cn`），不要先无参数调用 `qtou_account_add`，不要依赖 MCP elicitation。表单密码只到 BrowserSecureFill，不要抄进工具参数、聊天或 `qtpat_…`，不要拷贝 `~/.qtou`，不要打开 bot 的 box 桌面代签。代签 POST 见上文，写死为演示站 74，且不是表单 site。
 
 手动配 HTTP 的可继续用根目录 `mcp.json`（Bearer `${QTOU_CONNECTOR_TOKEN}`）。
 

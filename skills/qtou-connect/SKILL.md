@@ -3,22 +3,39 @@ name: qtou-connect
 description: >-
   连接轻投（qtou）：登录与自动保存、多账号添加/切换/退出、鉴权规则、工具清单与通用返回/错误约定。
   用户说连轻投、装轻投、登录轻投、换轻投账号、退出轻投，或其他轻投技能需要先连上时用。
+  未登录时第一步弹 RequestUserForm(kind=login, site=qtou.cn)，不要先无参数调用 qtou_account_add。
+  表单密码只到 BrowserSecureFill，不要抄进 MCP 参数或聊天。
 ---
 # 轻投：连接与账号
 
-## 连接
+## 连接（新 bot 先看这一页）
 
-**默认登录（宿主 bot，如 Grok Bot）**：未登录 / 401 / 第一次安装，**直接**在用户自己的聊天里弹出安全表单（RequestUserForm / Vault），收取轻投用户名 + 掩码密码。不要先赌、也不要依赖 MCP elicitation。elicitation 若被取消、报 `-32001`，或用户说「没看到 / 看不到表单」，立刻改弹同一张安全表单。插件自己调用不了 RequestUserForm，未登录时会返回 JSON-RPC `-32001`，`error.data` 为 `AUTH_REQUIRED`（含代签地址和字段），宿主应按此弹表，不要叫用户再试一次 elicitation。
+未登录、本机没有账号、401、`AUTH_REQUIRED`，或用户说要登录：**第一步**由宿主弹出安全表单。不要先调用 `qtou_account_add`。
 
-1. 已连且冒烟（`agent_health`）通则结束。
-2. 未登录：弹 RequestUserForm（字段：轻投用户名、轻投密码（掩码））。站点必须写死为代签登录 URL `http://113.250.189.74:18081/api/v1/agent/auth/login`（轻投演示站 74）。禁止写成 `agent.bitilinks.cn`（工场，不是轻投）或 `localhost` / `127.0.0.1`（安全表单会拒）。
-3. 拿到表单结果后：调用 `qtou_account_add({ username, password })`（stdio 代理代签并写入本机 `~/.qtou/`，不要回显密码）；若连接器是 HTTP，也可由宿主把表单结果 POST 到上述代签地址，将返回的 `agentKey` 写入插件变量 `QTOU_CONNECTOR_TOKEN`（key 永不进聊天）。然后 `agent_health` 冒烟。
-4. Codex / WorkBuddy / Grok 命令行补充路径：插件的 `qtou` 连接由 `tools/qtou_mcp_proxy.py` 启动。没有可用账号或 key 失效时，它仍可请客户端弹出 MCP 表单（不支持表单的客户端改用 macOS 对话框），签发后保存在本机 `~/.qtou/`，之后自动复用。表单内容只回给启动器，不进聊天。这不是 Grok Bot 的默认路径。工具返回「未登录轻投：已取消登录」时，告诉用户再发一次请求、在表单里登录。
+RequestUserForm：
+
+- `kind`: `login`
+- `site`: `qtou.cn`（域名。不是 IP，不是 `localhost` / `127.0.0.1`，不是 `agent.bitilinks.cn`）
+- 字段：轻投用户名、轻投密码（掩码）
+
+代签 POST（代理自己用，**不是**表单的 site）：`http://113.250.189.74:18081/api/v1/agent/auth/login`。`QTOU_LOGIN_URL` 只改代理的 POST 目标，不要把这个地址填进 `site`。
+
+**平台限制：** RequestUserForm 的密码只进入 BrowserSecureFill，不会回到模型，也不能写成 MCP 参数。不要把表单密钥传给 `qtou_account_add`。不要在聊天里要明文密码。不要打开 bot 的 box 桌面代签。不要拷贝 `~/.qtou` 或 `qtpat_` key。这条链路补不上，停在这里并说明缺口。
+
+`qtou_account_add` 的 inputSchema 始终有 `username` 和 `password`。GetDynamicTools 若把参数缓存成 `properties: {}`，那是旧缓存，不是「该无参数调用」。无参数调用会走 MCP elicitation；Grok Bot 不展示，调用以 `-32001` cancelled 结束。
+
+收到 `-32001` 或 `error.data.code=AUTH_REQUIRED`：不要重试 elicitation。按 `data` 弹表：`action=RequestUserForm`，`kind=login`，`site=qtou.cn`，`loginUrl` 是上面的代签 POST，`fields` 是用户名和密码，`secretDelivery=BrowserSecureFill`。密钥仍然只到 BrowserSecureFill。
+
+elicitation 只留给确实会弹出 MCP 表单的客户端（Codex 等），是可选回退，不是 Grok Bot 的第一步。不支持表单的本地客户端仍可用 macOS 对话框。答案只回给启动器，不进聊天。
+
+1. 已连且 `agent_health` 通过则结束。
+2. 否则立刻 RequestUserForm（见上）。不要先无参数调用 `qtou_account_add`。
+3. 弹表之后不要把密码写入任何工具参数。登录若仍未完成，说明 BrowserSecureFill 缺口后停止。
 
 ## 多账号（插件启动器提供的本地工具）
 
 - `qtou_account_list`：列出本机已登录的账号，标出当前账号。用户问「现在用的哪个账号」时调它。
-- `qtou_account_add`：添加一个账号并切换为当前账号。优先传入 RequestUserForm 收回的 `username` 与 `password`；不传参数时，支持 elicitation 的客户端会弹 MCP 表单（取消或看不到则返回 `AUTH_REQUIRED`，宿主应立刻改弹 RequestUserForm）。
+- `qtou_account_add`：添加一个账号并切换为当前账号。Grok Bot 不要为了登录去调它。schema 里的 `username` / `password` 不能用来承接 RequestUserForm 的密钥。只有会展示 MCP elicitation 的客户端可以不传参数，由代理自己收凭据；取消或 `-32001` 时立刻改弹 RequestUserForm，不要再试 elicitation。
 - `qtou_account_switch({ username })`：切换当前账号。
 - `qtou_account_logout({ username? })`：退出账号（不传则退出当前账号），同时在服务端吊销它的 key。
 
@@ -29,13 +46,14 @@ description: >-
 | 项 | 值 |
 | --- | --- |
 | MCP URL | `http://113.250.189.74:18081/api/v1/agent/mcp`（可用环境变量 `QTOU_MCP_URL` 覆盖；默认即此地址。禁止写成 `agent.bitilinks.cn` 或 `localhost` / `127.0.0.1`） |
-| 代签登录 URL（演示 74，写死） | `http://113.250.189.74:18081/api/v1/agent/auth/login`（可用 `QTOU_LOGIN_URL` 覆盖代理自己的 POST 目标；宿主弹表时必须用这个演示站地址，禁止写成工场或 localhost） |
+| 表单 site | `qtou.cn`（RequestUserForm 的 site。不是 IP，不是 localhost，不是 `agent.bitilinks.cn`） |
+| 代签 POST（演示 74，写死） | `http://113.250.189.74:18081/api/v1/agent/auth/login`（可用 `QTOU_LOGIN_URL` 覆盖代理自己的 POST 目标。这不是表单 site） |
 | 传输 | Streamable HTTP |
 | 鉴权 | `Authorization: Bearer <agent_key>` |
 | 连接器名 | `qtou`（Grok 上手工添加的可能叫 `轻投`，二者等价） |
 | 插件变量 | `QTOU_CONNECTOR_TOKEN` |
 
-签发：弹用户聊天里的安全表单收账密（RequestUserForm，不收 PAT，不在聊天里要明文密码）→ 调用 `qtou_account_add` 或代调 `POST http://113.250.189.74:18081/api/v1/agent/auth/login` → 得窄 scope `agentKey` → 由插件写入本机或写入 `QTOU_CONNECTOR_TOKEN`。审计不写密码明文；key 永不进聊天。
+签发：宿主先弹 RequestUserForm（`kind=login`，`site=qtou.cn`）。密码只进入 BrowserSecureFill，模型不能把它交给 `qtou_account_add` 或代 POST。支持 elicitation 的客户端由代理自己收凭据并代 POST `http://113.250.189.74:18081/api/v1/agent/auth/login`，得到窄 scope `agentKey` 后写入本机或 `QTOU_CONNECTOR_TOKEN`。审计不写密码明文；key 永不进聊天。
 
 ## 只走 MCP 工具（强制）
 
@@ -60,4 +78,4 @@ description: >-
 
 ## 不做
 
-不手抄 PAT；不在聊天里要账号密码或 key；不拷贝他人 `~/.qtou`；不打开 bot 的 box 桌面代签页；不把登录站点写成 `agent.bitilinks.cn`（工场）或 `localhost` / `127.0.0.1`；不直连业务库；不与工场抢名；调工具不把参数对象、数组、数字写成字符串。
+不手抄 PAT；不在聊天里要账号密码或 key；不把 RequestUserForm 的密码抄进 MCP 参数（密钥只到 BrowserSecureFill）；不拷贝他人 `~/.qtou`；不打开 bot 的 box 桌面代签页；不把表单 site 写成 IP、`agent.bitilinks.cn`（工场）或 `localhost` / `127.0.0.1`；不直连业务库；不与工场抢名；调工具不把参数对象、数组、数字写成字符串。
