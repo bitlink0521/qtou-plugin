@@ -10,7 +10,7 @@ description: >-
 
 **默认登录（宿主 bot，如 Grok Bot / 轻投专家）**：未登录 / 401 / 第一次安装，**直接由宿主发起安全登录**采集轻投用户名与密码。不要先调空的 `qtou_account_add`，也不要赌 MCP elicitation。elicitation 若被取消、报 `-32001`，或用户说「没看到 / 看不到表单」，立刻改为宿主安全登录，不要再试 elicitation。插件自己弹不出宿主的安全采集控件；未登录时工具可能返回 JSON-RPC `-32001`，`error.data` 为 `AUTH_REQUIRED`（`action=HostSecureLogin`，含代签地址和字段），宿主应按此发起安全登录。
 
-注意：仅弹出网页类安全表单（例如只能把密文交给浏览器填充的控件）**不等于**已经把密码交给了本插件；安全登录如何把账密交给 `qtou_account_add` 以宿主实现为准（具体通路另定）。密码不得进聊天、不得打印。
+注意：仅弹出网页类安全表单（例如只能把密文交给浏览器填充的控件）**不等于**已经把密码交给了本插件；安全登录如何把账密交给 `qtou_account_add` 以宿主实现为准（具体通路另定，见交密方案）。密码不得进聊天、不得打印。若使用 RequestUserForm，`site` 必须是域名 `qtou.cn`（禁止 IP、`localhost`、`127.0.0.1`、`agent.bitilinks.cn`）；代签 POST 地址（演示站 74）**不是**表单 site，二者不要混用。
 
 1. 已连且冒烟（`agent_health`）通则结束。
 2. 未登录：宿主发起安全登录，得到可用的 `username` 与 `password`（不要从聊天正文收集密码）。
@@ -64,4 +64,4 @@ description: >-
 
 ## 不做
 
-不手抄 PAT；不在聊天里要账号密码或 key；不拷贝他人 `~/.qtou`；不打开 bot 的 box 桌面代签页；不把代签/MCP 地址写成 `agent.bitilinks.cn`（工场）或 `localhost` / `127.0.0.1`；不直连业务库；不与工场抢名；不空参赌 MCP elicitation；调工具不把参数对象、数组、数字写成字符串。
+不手抄 PAT；不在聊天里要账号密码或 key；不拷贝他人 `~/.qtou`；不打开 bot 的 box 桌面代签页；不把代签/MCP 地址写成 `agent.bitilinks.cn`（工场）或 `localhost` / `127.0.0.1`；不把 RequestUserForm 的 site 写成 IP 或工场/localhost（要用 `qtou.cn`）；不假设弹网页安全表单就能把密码交给本工具；不直连业务库；不与工场抢名；不空参赌 MCP elicitation；调工具不把参数对象、数组、数字写成字符串。
