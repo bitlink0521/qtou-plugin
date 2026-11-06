@@ -6,9 +6,13 @@ QTOU_MCP_URL with the current account's connector key. When there is no account 
 the user is asked for the qtou username/password, a key is signed and saved, and the request is retried,
 so the first use logs in and later uses just work.
 
-Credentials are collected with an MCP form (elicitation/create) when the client supports it; the answer
-goes back to this bridge only, never to the model or the chat. Otherwise a macOS dialog is used. A client that
-signs the key itself (e.g. Grok Bot's secure form) can pass it in QTOU_CONNECTOR_TOKEN instead.
+Host bots such as Grok Bot should collect credentials with their own secure chat form (RequestUserForm:
+username + masked password) and pass them to qtou_account_add, or POST them to DEFAULT_AUTH_LOGIN_URL.
+This process cannot show RequestUserForm itself. Do not depend on MCP elicitation: if elicitation is
+cancelled, returns -32001, or the user cannot see it, the bridge returns AUTH_REQUIRED so the host can
+show that form immediately. On clients that advertise elicitation, credentials may still be collected
+with elicitation/create (the answer goes back to this bridge only, never to the model or the chat);
+otherwise a macOS dialog is used. A client that signs the key itself can pass it in QTOU_CONNECTOR_TOKEN.
 
 Accounts live in ~/.qtou/accounts.json (mode 600); the current account's key is mirrored to
 ~/.qtou/connector-token for the other plugin tools. Four local tools manage them:
@@ -33,11 +37,24 @@ from qtou_shared import MIGRATED_ACCOUNT_NAME, parse_mcp_body, write_private
 
 MCP_URL = qtou_shared.DEFAULT_MCP_URL
 API_BASE = MCP_URL.rsplit('/mcp', 1)[0]
+DEFAULT_AUTH_LOGIN_URL = qtou_shared.DEFAULT_AUTH_LOGIN_URL
+LOGIN_URL = qtou_shared.auth_login_url()
 TOKEN_PATH = qtou_shared.TOKEN_PATH
 ACCOUNTS_PATH = qtou_shared.ACCOUNTS_PATH
 AUTH_ERROR_CODE = 10007
 MAX_LOGIN_ATTEMPTS = 3
 FORM_TIMEOUT_SECONDS = 600
+AUTH_REQUIRED_MESSAGE = (
+    '未登录轻投。请立刻在用户自己的聊天里弹出安全表单（RequestUserForm），'
+    '不要再尝试 MCP elicitation，也不要在聊天里索要明文密码。'
+    '代签登录地址（轻投演示站 74，必须用这个地址，禁止写成 agent.bitilinks.cn、localhost 或 127.0.0.1）：'
+    + DEFAULT_AUTH_LOGIN_URL
+    + '。表单字段：username=轻投用户名，password=轻投密码（掩码）。'
+    '拿到表单结果后调用 qtou_account_add，传入 username 与 password（不要回显）；'
+    '或由宿主把表单结果 POST 到上述地址，将返回的 agentKey 写入插件变量 QTOU_CONNECTOR_TOKEN（key 永不进聊天）。'
+    '禁止：拷贝他人 ~/.qtou 或 qtpat_ key；打开 bot 的 box 桌面代签页；在聊天里要明文密码。'
+    '写入后调用 agent_health 冒烟。'
+)
 
 write_lock = threading.Lock()
 login_lock = threading.Lock()
@@ -50,8 +67,15 @@ LOCAL_TOOLS = [
      'description': '列出本机已登录的轻投账号，并标出当前使用的账号。不返回 key。',
      'inputSchema': {'type': 'object', 'properties': {}}},
     {'name': 'qtou_account_add',
-     'description': '弹出登录表单添加一个轻投账号，登录成功后切换为当前账号。账号密码只填在表单里，不要在聊天里索要。',
-     'inputSchema': {'type': 'object', 'properties': {}}},
+     'description': ('添加一个轻投账号并切换为当前账号。优先由宿主 bot 在用户自己的聊天里弹出安全表单'
+                     '（RequestUserForm）收取用户名和掩码密码，再把 username、password 传给本工具；'
+                     '不要在聊天里索要明文密码。不传参数时，支持 MCP elicitation 的客户端会弹表单；'
+                     '若 elicitation 被取消、报 -32001 或用户看不到，立刻改走 RequestUserForm。'
+                     '代签地址为 ' + DEFAULT_AUTH_LOGIN_URL + '（禁止写成 agent.bitilinks.cn 或 localhost）。'),
+     'inputSchema': {'type': 'object', 'properties': {
+         'username': {'type': 'string', 'description': '轻投用户名（来自 RequestUserForm，不要从聊天正文收集）'},
+         'password': {'type': 'string', 'description': '轻投密码（来自安全表单的掩码字段，不要回显）'},
+     }}},
     {'name': 'qtou_account_switch',
      'description': '切换当前轻投账号，之后的轻投操作都以该账号身份进行。',
      'inputSchema': {'type': 'object', 'properties': {'username': {'type': 'string', 'description': '要切换到的账号用户名'}},
@@ -70,6 +94,26 @@ class LoginCancelled(Exception):
 def log(message):
     sys.stderr.write('[qtou-mcp] %s\n' % message)
     sys.stderr.flush()
+
+
+def auth_required_data():
+    return {
+        'code': 'AUTH_REQUIRED',
+        'action': 'RequestUserForm',
+        'loginUrl': DEFAULT_AUTH_LOGIN_URL,
+        'fields': [
+            {'name': 'username', 'title': '轻投用户名', 'secret': False},
+            {'name': 'password', 'title': '轻投密码', 'secret': True},
+        ],
+        'submit': 'qtou_account_add',
+        'doNot': [
+            '不要依赖 MCP elicitation；取消、报 -32001 或用户看不到时立刻弹 RequestUserForm',
+            '不要把站点写成 agent.bitilinks.cn（工场）或 localhost / 127.0.0.1（安全表单会拒）',
+            '不要拷贝他人 ~/.qtou 或 qtpat_ key',
+            '不要打开 bot 的 box 桌面代签页',
+            '不要在聊天里索要明文密码或 key',
+        ],
+    }
 
 
 def load_accounts():
@@ -115,7 +159,7 @@ def request_client(method, params):
 
 def ask_form(hint):
     reply = request_client('elicitation/create', {
-        'message': (hint + '\n' if hint else '') + '登录轻投后会自动保存，以后不用再输入。',
+        'message': (hint + '\n' if hint else '') + '登录轻投（演示站 %s）后会自动保存，以后不用再输入。' % DEFAULT_AUTH_LOGIN_URL,
         'requestedSchema': {
             'type': 'object',
             'properties': {
@@ -164,7 +208,7 @@ def ask_credentials(hint, use_terminal):
 def sign_key(username, password):
     body = urllib.parse.urlencode({'username': username, 'password': password, 'client': 'qtou-mcp-proxy'}).encode()
     try:
-        with urllib.request.urlopen(urllib.request.Request(API_BASE + '/auth/login', data=body, method='POST'), timeout=20) as response:
+        with urllib.request.urlopen(urllib.request.Request(LOGIN_URL, data=body, method='POST'), timeout=20) as response:
             data = json.load(response)
     except urllib.error.HTTPError as error:
         try:
@@ -274,8 +318,23 @@ def call_local_tool(name, arguments):
     if name == 'qtou_account_list':
         return tool_result(account_summary())
     if name == 'qtou_account_add':
+        username = (arguments.get('username') or '').strip()
+        password = arguments.get('password') if isinstance(arguments.get('password'), str) else ''
         with login_lock:
-            login(reason='添加轻投账号。')
+            if username or password:
+                if not username or not password:
+                    return tool_result({'error': {'code': 'INVALID_ARGUMENT',
+                                                  'message': '请通过安全表单同时提供 username 和 password',
+                                                  'tool': name},
+                                       'login': auth_required_data()}, is_error=True)
+                key, key_id, error = sign_key(username, password)
+                if not key:
+                    return tool_result({'error': {'code': 'AUTH_FAILED',
+                                                  'message': error or '登录失败', 'tool': name},
+                                       'login': auth_required_data()}, is_error=True)
+                save_account(username, key, key_id)
+            else:
+                login(reason='添加轻投账号。')
         return tool_result(dict(account_summary(), message='已登录并切换到新账号'))
     data = load_accounts()
     username = (arguments.get('username') or '').strip()
@@ -388,8 +447,11 @@ def initialize(message):
     emit(local_initialize(message))
 
 
-def error_reply(message, code, text):
-    return {'jsonrpc': '2.0', 'id': message.get('id'), 'error': {'code': code, 'message': text}}
+def error_reply(message, code, text, data=None):
+    error = {'code': code, 'message': text}
+    if data is not None:
+        error['data'] = data
+    return {'jsonrpc': '2.0', 'id': message.get('id'), 'error': error}
 
 
 def handle(message):
@@ -411,7 +473,7 @@ def handle(message):
         else:
             replies = forward(message)
     except LoginCancelled:
-        replies = [error_reply(message, -32001, '未登录轻投：已取消登录。再次使用轻投时会重新请你登录。')]
+        replies = [error_reply(message, -32001, AUTH_REQUIRED_MESSAGE, auth_required_data())]
     except Exception as error:
         log('forward failed: %s' % type(error).__name__)
         replies = [error_reply(message, -32002, '轻投服务暂时不可用，请稍后重试')]

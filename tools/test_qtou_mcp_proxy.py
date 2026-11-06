@@ -77,7 +77,7 @@ class ProxyTests(unittest.TestCase):
         cls.server = HTTPServer(('127.0.0.1', 0), FakeQtou)
         threading.Thread(target=cls.server.serve_forever, daemon=True).start()
         base = 'http://127.0.0.1:%d/api/v1/agent' % cls.server.server_port
-        cls.patches = [mock.patch.object(proxy, 'MCP_URL', base + '/mcp'), mock.patch.object(proxy, 'API_BASE', base)]
+        cls.patches = [mock.patch.object(proxy, 'MCP_URL', base + '/mcp'), mock.patch.object(proxy, 'API_BASE', base), mock.patch.object(proxy, 'LOGIN_URL', base + '/auth/login')]
         for patch in cls.patches:
             patch.start()
 
@@ -146,8 +146,52 @@ class ProxyTests(unittest.TestCase):
         with mock.patch.object(proxy, 'ask_credentials', side_effect=proxy.LoginCancelled), \
                 mock.patch.object(proxy, 'emit', side_effect=emitted.append):
             proxy.handle({'jsonrpc': '2.0', 'id': 3, 'method': 'tools/list'})
-        self.assertEqual(emitted[0]['error']['code'], -32001)
+        error = emitted[0]['error']
+        self.assertEqual(error['code'], -32001)
+        self.assertIn('RequestUserForm', error['message'])
+        self.assertIn(proxy.DEFAULT_AUTH_LOGIN_URL, error['message'])
+        self.assertIn('agent.bitilinks.cn', error['message'])
+        self.assertEqual(error['data']['code'], 'AUTH_REQUIRED')
+        self.assertEqual(error['data']['action'], 'RequestUserForm')
+        self.assertEqual(error['data']['loginUrl'], proxy.DEFAULT_AUTH_LOGIN_URL)
+        self.assertEqual(error['data']['submit'], 'qtou_account_add')
         self.assertEqual(proxy.read_token(), '')
+
+    def test_default_login_url_is_demo_74_not_factory_or_localhost(self):
+        self.assertEqual(proxy.DEFAULT_AUTH_LOGIN_URL,
+                         'http://113.250.189.74:18081/api/v1/agent/auth/login')
+        self.assertNotIn('agent.bitilinks.cn', proxy.DEFAULT_AUTH_LOGIN_URL)
+        self.assertNotIn('localhost', proxy.DEFAULT_AUTH_LOGIN_URL)
+        self.assertNotIn('127.0.0.1', proxy.DEFAULT_AUTH_LOGIN_URL)
+
+    def test_account_add_accepts_secure_form_credentials(self):
+        with mock.patch.object(proxy, 'ask_credentials') as ask:
+            added, is_error = call('qtou_account_add', username='u1', password='right')
+        self.assertFalse(is_error)
+        self.assertEqual(added['current'], 'u1')
+        self.assertEqual(proxy.read_token(), key_for('u1'))
+        ask.assert_not_called()
+        self.assertEqual(FakeQtou.logins, ['u1'])
+        dumped = json.dumps(added)
+        self.assertNotIn('right', dumped)
+        self.assertNotIn('qtpat_', dumped)
+
+    def test_account_add_partial_credentials_returns_auth_required(self):
+        result, is_error = call('qtou_account_add', username='u1')
+        self.assertTrue(is_error)
+        self.assertEqual(result['error']['code'], 'INVALID_ARGUMENT')
+        self.assertEqual(result['login']['loginUrl'], proxy.DEFAULT_AUTH_LOGIN_URL)
+        self.assertEqual(result['login']['action'], 'RequestUserForm')
+        self.assertEqual(proxy.read_token(), '')
+
+    def test_account_add_wrong_password_does_not_save_or_echo(self):
+        secret = 'wrong-pass-should-not-leak'
+        result, is_error = call('qtou_account_add', username='u1', password=secret)
+        self.assertTrue(is_error)
+        self.assertEqual(result['error']['code'], 'AUTH_FAILED')
+        self.assertEqual(result['login']['loginUrl'], proxy.DEFAULT_AUTH_LOGIN_URL)
+        self.assertEqual(proxy.read_token(), '')
+        self.assertNotIn(secret, json.dumps(result, ensure_ascii=False))
 
     def test_form_login_answer_goes_to_bridge_only(self):
         proxy.session['client_form'] = True

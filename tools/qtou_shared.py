@@ -9,6 +9,14 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 DEFAULT_MCP_URL = os.environ.get('QTOU_MCP_URL') or 'http://113.250.189.74:18081/api/v1/agent/mcp'
+DEFAULT_AUTH_LOGIN_URL = 'http://113.250.189.74:18081/api/v1/agent/auth/login'
+
+
+def auth_login_url():
+    """Where to POST username/password for an agent key. QTOU_LOGIN_URL overrides; default is demo 74."""
+    return (os.environ.get('QTOU_LOGIN_URL') or '').strip() or DEFAULT_AUTH_LOGIN_URL
+
+
 TOKEN_PATH = os.path.expanduser('~/.qtou/connector-token')
 ACCOUNTS_PATH = os.path.expanduser('~/.qtou/accounts.json')
 MIGRATED_ACCOUNT_NAME = '已保存账号'
