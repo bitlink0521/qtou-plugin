@@ -109,6 +109,14 @@ class BoundaryTests(unittest.TestCase):
             d=json.loads((p/'out.json').read_text());self.assertEqual(d['businessWrites'],0);self.assertEqual(d['missingOnlyPatch'],{});self.assertEqual(d['patchedBpText'],text)
             self.assertEqual((p/'out.json').stat().st_mode & 0o777,0o600)
 
+class BusinessVerbatimTests(unittest.TestCase):
+    def test_business_must_be_copied_from_the_quote(self):
+        copied=proposal('business','工业软件研发与技术服务，为企业提供生产管理系统')
+        self.assertIn('business',enrich.review(COMPANY,copied,[source()],{})['missingOnlyPatch'])
+        for value in ('利用软件技术为企业提供管理服务','工业软件'):
+            d=enrich.review(COMPANY,proposal('business',value),[source()],{})
+            self.assertNotIn('business',d['missingOnlyPatch']);self.assertEqual(d['fields'][0]['status'],'needs_verification')
+
 class VerifierTests(unittest.TestCase):
     def run_main(self,p,*extra):
         (p/'sources.json').write_text(json.dumps({'companyName':COMPANY,'sources':[source()],'queries':[]}))
