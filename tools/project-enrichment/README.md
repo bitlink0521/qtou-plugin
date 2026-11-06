@@ -42,7 +42,7 @@ python3 tools/project-enrichment/enrich.py \
 4. 用户明确授权补空值后使用同一工具并传`confirmed:true`，事务保存公司、扩展和项目字段及来源审计。权限不扩大，旧入池/天眼查接口保留。
 5. 再次get并核验网页；重复相同补写应filledCount=0。荣誉对应项目页字段。原有字段不覆盖；未知字典不猜ID。该接口不上传PDF附件。
 
-原confirm仍先走原工商服务；天眼查失败时可提交经审核的`companyFallback`公开证据，通过新增校验器形成有主体信息的公司记录。Bot须加载更新后的`skill/qtou/PROJECT-ENRICHMENT.md`，用户确认入池与授权补空值各按会话真实授权执行。
+原confirm仍先走原工商服务；天眼查失败时可提交经审核的`companyFallback`公开证据，通过新增校验器形成有主体信息的公司记录。Bot按 `skills/qtou-bp-intake/ENRICHMENT.md` 执行，用户确认入池与授权补空值各按会话真实授权执行。
 
 服务器需部署本目录、原MCP客户端及更新skill，配置该服务器的API凭据或可用Tavily插件；Mac路径不会自动在服务器生效。未配置时明确报失败，不回退编造。撤销本功能可移除新增目录并恢复skill新增段落，无业务数据迁移。
 
