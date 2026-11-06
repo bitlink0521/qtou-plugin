@@ -1,17 +1,22 @@
 # 项目公开信息补全
 
-Bot侧默认采用 Tavily search → extract 正文 → Grok API 结构化整理 → 带出处草稿，再交原轻投BP解析及人工确认。标准库实现；不改Java、数据库、原工商服务或原确认逻辑。enrich.py不创建pending、不确认、不更新项目；workflow.py在已授权且证据审阅后可经MCP补空值，不直连数据库。
+默认采用 Tavily search → extract 正文 → 调用插件的Agent用自己的模型结构化核实（`--verifier grok`可改用Grok API）→ 带出处草稿，再交原轻投BP解析及人工确认。标准库实现；不改Java、数据库、原工商服务或原确认逻辑。enrich.py不创建pending、不确认、不更新项目；workflow.py在已授权且证据审阅后可经MCP补空值，不直连数据库。
 
 ## 运行
 
 ```sh
-export GROK_API_KEY_FILE='/absolute/credentials.txt'
+# 1. 生成核实任务 /absolute/verify-task.json（status=proposal_required）
 python3 tools/project-enrichment/enrich.py \
   --company '法定公司全称' --sources-file /absolute/sources.json \
   --bp-text-file /absolute/bp.txt --output /absolute/draft.json
+# 2. Agent 按任务核实、存为 proposal.json 后，带上结果和实际模型名重跑
+python3 tools/project-enrichment/enrich.py \
+  --company '法定公司全称' --sources-file /absolute/sources.json \
+  --bp-text-file /absolute/bp.txt --output /absolute/draft.json \
+  --proposal-file /absolute/proposal.json --model '实际模型名'
 ```
 
-Grok支持 `GROK_API_KEY` / `XAI_API_KEY`、`GROK_BASE_URL` / `XAI_BASE_URL`、`GROK_MODEL`（默认grok-4.7）。凭据文件可含一行密钥赋值及一行HTTPS API基础地址，也可只含密钥；默认地址为https://api.x.ai/v1。兼容网关通过相同配置使用，实际服务方由部署者选择。文件路径可用`--grok-credentials-file`显式传入；都没配时读本机`~/.qtou/grok-credentials`。密钥不写代码、草稿或日志；不要在shell命令里直接传密钥。现有Grok CLI登录不能代替API凭据。
+无人值守脚本可加`--verifier grok`改由Grok API核实。Grok支持 `GROK_API_KEY` / `XAI_API_KEY`、`GROK_BASE_URL` / `XAI_BASE_URL`、`GROK_MODEL`（默认grok-4.7）。凭据文件可含一行密钥赋值及一行HTTPS API基础地址，也可只含密钥；默认地址为https://api.x.ai/v1。兼容网关通过相同配置使用，实际服务方由部署者选择。文件路径可用`--grok-credentials-file`显式传入；都没配时读本机`~/.qtou/grok-credentials`。密钥不写代码、草稿或日志；不要在shell命令里直接传密钥。现有Grok CLI登录不能代替API凭据。
 
 有`TAVILY_API_KEY`或本机`~/.qtou/tavily-key`可省略sources-file，脚本自动执行两次公开搜索并提取正文。无key时，Bot用已连接Tavily插件search、extract并提供下述文件，不索取聊天明文密钥，不把search摘要冒充正文：
 
@@ -21,7 +26,7 @@ Grok支持 `GROK_API_KEY` / `XAI_API_KEY`、`GROK_BASE_URL` / `XAI_BASE_URL`、`
 
 示例不是可用证据。检索优先官网、官方公告和权威工商来源；歧义先消歧。sources最多取12条，每条正文最多20000字；截断后核验只针对保留片段，不表示通读全文。Tavily提取失败的页不作为成功来源。没有正文或API失败会阻断本次补全，原业务可按原流程继续，但不能宣称已补全。
 
-`--existing-file`接收原字段JSON；`--bp-text-file`接收原BP，并调用本地原`agent_bp_parse`读取已有字段。也可用`--parsed-bp-file`传入原解析结果（必须与BP对应）。来源与已有资料的companyName须与目标公司一致。传给Grok的只有公司名和公开来源，不发送原BP及已有私有字段。
+`--existing-file`接收原字段JSON；`--bp-text-file`接收原BP，并调用本地原`agent_bp_parse`读取已有字段。也可用`--parsed-bp-file`传入原解析结果（必须与BP对应）。来源与已有资料的companyName须与目标公司一致。交给核实模型的只有公司名和公开来源，不发送原BP及已有私有字段。
 
 ## 输出与边界
 
@@ -32,7 +37,7 @@ Grok支持 `GROK_API_KEY` / `XAI_API_KEY`、`GROK_BASE_URL` / `XAI_BASE_URL`、`
 ## 已入池项目基本情况补全
 
 1. `agent_projects_profile_get(pendingId)` 回读当前租户、原入池用户拥有的已确认项目及字段库存。
-2. Tavily搜索并提取公开正文，保留真实query、searchedAt、retrievedAt、URL和正文。`python3 tools/project-enrichment/profile.py --help`查看Grok结构化提取参数。
+2. Tavily搜索并提取公开正文，保留真实query、searchedAt、retrievedAt、URL和正文。`python3 tools/project-enrichment/profile.py --help`查看核实参数：默认先返回proposal_required和verify-task.json，Agent核实后带`--proposal-file`、`--model`重跑。
 3. `agent_projects_profile_fill(pendingId,evidence)` 默认仅预览，逐字段返回ready/preserved/unknown/needs_verification。
 4. 用户明确授权补空值后使用同一工具并传`confirmed:true`，事务保存公司、扩展和项目字段及来源审计。权限不扩大，旧入池/天眼查接口保留。
 5. 再次get并核验网页；重复相同补写应filledCount=0。荣誉对应项目页字段。原有字段不覆盖；未知字典不猜ID。该接口不上传PDF附件。
@@ -58,6 +63,6 @@ Bot入池后使用`workflow.py --pending-id ID --output-dir 本轮目录`。本�
 
 插件queries每项在原query/searchedAt外须含queryId、round、group、include_domains、source=tavily_plugin、status=success、hits和urls（直接采用计划参数，命中数和URL按实际响应记录）。失败写status=failed及脱敏code；失败查询不算覆盖。最多两轮检索；未查实、来源冲突、字典不匹配明确报告，不能称已穷尽公开资料。
 
-默认调用Grok和MCP只读预览。Bot逐项审核主体、出处连续原文、值、日期及单位后，保留模型原产物和修订理由，传`--evidence-file 审核后文件 --apply`写入已授权的空字段；不传已审核证据文件时，即使加apply也只返回review_required。审核文件的sources和searchReceipts必须与当前来源完全一致。脚本检查读回项目/公司ID、实际写入值、原BP及所有非空值；失败明确报错。unknown或needs_verification存在则partial，不表示全部字段完成。网页验证仍由Bot执行，脚本result的browserVerificationRequired不是网页验证成功。
+默认由Agent核实（先返回proposal_required）并做MCP只读预览。Bot逐项审核主体、出处连续原文、值、日期及单位后，保留模型原产物和修订理由，传`--evidence-file 审核后文件 --apply`写入已授权的空字段；不传已审核证据文件时，即使加apply也只返回review_required。审核文件的sources和searchReceipts必须与当前来源完全一致。脚本检查读回项目/公司ID、实际写入值、原BP及所有非空值；失败明确报错。unknown或needs_verification存在则partial，不表示全部字段完成。网页验证仍由Bot执行，脚本result的browserVerificationRequired不是网页验证成功。
 
 输出本轮before、research-plan、sources、evidence、preview、applied、after、result JSON；重复运行只针对当前缺失项。此流程由插件在BP入池/明确补全请求时触发，不是后台自动定时刷新。Java工商原流程保持不变。

@@ -104,9 +104,41 @@ class BoundaryTests(unittest.TestCase):
             p=Path(directory);text='项目名称：原项目\n公司名称：'+COMPANY+'\n项目简介：已有简介'
             (p/'bp.txt').write_text(text);(p/'parsed.json').write_text(json.dumps({'companyName':COMPANY,'introduction':'已有简介'}));(p/'sources.json').write_text(json.dumps({'companyName':COMPANY,'sources':[source()]}))
             argv=['enrich.py','--company',COMPANY,'--bp-text-file',str(p/'bp.txt'),'--parsed-bp-file',str(p/'parsed.json'),'--sources-file',str(p/'sources.json'),'--output',str(p/'out.json')]
-            with patch('sys.argv',argv),patch.object(enrich,'grok_config',return_value=('placeholder','https://example.com','grok-test')),patch.object(enrich,'synthesize',return_value=(proposal(),{})),patch.object(enrich,'parse_local_bp',side_effect=AssertionError('unexpected MCP')),contextlib.redirect_stdout(io.StringIO()):
+            with patch('sys.argv',argv),patch.object(enrich,'propose',return_value=(proposal(),{})),patch.object(enrich,'parse_local_bp',side_effect=AssertionError('unexpected MCP')),contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(enrich.main(),0)
             d=json.loads((p/'out.json').read_text());self.assertEqual(d['businessWrites'],0);self.assertEqual(d['missingOnlyPatch'],{});self.assertEqual(d['patchedBpText'],text)
             self.assertEqual((p/'out.json').stat().st_mode & 0o777,0o600)
+
+class VerifierTests(unittest.TestCase):
+    def run_main(self,p,*extra):
+        (p/'sources.json').write_text(json.dumps({'companyName':COMPANY,'sources':[source()],'queries':[]}))
+        argv=['enrich.py','--company',COMPANY,'--sources-file',str(p/'sources.json'),'--output',str(p/'out.json'),*extra]
+        out=io.StringIO()
+        with patch('sys.argv',argv),patch.object(enrich,'grok_json',side_effect=AssertionError('unexpected Grok')),contextlib.redirect_stdout(out):
+            code=enrich.main()
+        return code,json.loads(out.getvalue().strip().splitlines()[-1])
+
+    def test_agent_is_default_and_gets_a_task_without_calling_grok(self):
+        with tempfile.TemporaryDirectory() as directory:
+            p=Path(directory);code,status=self.run_main(p)
+            self.assertEqual((code,status['status']),(0,'proposal_required'))
+            task=json.loads((p/'verify-task.json').read_text())
+            self.assertEqual(task['publicSources'][0]['id'],'S1');self.assertIn('entityMatched',task['schema']['properties'])
+            self.assertFalse((p/'out.json').exists())
+
+    def test_agent_proposal_records_the_named_model(self):
+        with tempfile.TemporaryDirectory() as directory:
+            p=Path(directory);(p/'proposal.json').write_text(json.dumps(proposal()))
+            code,status=self.run_main(p,'--proposal-file',str(p/'proposal.json'),'--model','gpt-5.5')
+            self.assertEqual((code,status['status']),(0,'review_required'))
+            d=json.loads((p/'out.json').read_text())
+            self.assertEqual(d['provider'],{'responseModel':'gpt-5.5','verifiedBy':'calling_agent'})
+            self.assertIn('introduction',d['missingOnlyPatch'])
+
+    def test_agent_proposal_requires_model_name(self):
+        with tempfile.TemporaryDirectory() as directory:
+            p=Path(directory);(p/'proposal.json').write_text(json.dumps(proposal()))
+            code,status=self.run_main(p,'--proposal-file',str(p/'proposal.json'))
+            self.assertEqual((code,status['code']),(1,'INPUT'))
 
 if __name__=='__main__':unittest.main()
