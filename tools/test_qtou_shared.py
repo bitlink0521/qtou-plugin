@@ -27,7 +27,7 @@ class LocalCredentialTest(unittest.TestCase):
     def test_grok_uses_saved_file_when_nothing_else_is_configured(self):
         saved = self.path('grok', 'key：test-key-123456\n\nurl：https://gateway.example.com/v1\n')
         self.assertEqual(qtou_shared.grok_config(default_file=saved),
-                         ('test-key-123456', 'https://gateway.example.com/v1', 'grok-4.3'))
+                         ('test-key-123456', 'https://gateway.example.com/v1', 'grok-4.7'))
 
     def test_grok_explicit_file_wins_over_saved_file(self):
         saved = self.path('saved', 'saved-key-123456\n')

@@ -125,7 +125,7 @@ def grok_config(credentials_file=None, default_file=None):
         raise GrokConfigError('未配置Grok API凭据')
     if parts.scheme != 'https' or not parts.hostname or parts.username or parts.password or parts.query or parts.fragment:
         raise GrokConfigError('Grok地址须为无凭据、无查询参数的HTTPS API地址')
-    model = os.environ.get('GROK_MODEL', 'grok-4.3')
+    model = os.environ.get('GROK_MODEL', 'grok-4.7')
     if not model.startswith('grok-'):
         raise GrokConfigError('补全模型须为Grok模型')
     return key, base, model

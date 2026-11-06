@@ -11,7 +11,7 @@ python3 tools/project-enrichment/enrich.py \
   --bp-text-file /absolute/bp.txt --output /absolute/draft.json
 ```
 
-Grok支持 `GROK_API_KEY` / `XAI_API_KEY`、`GROK_BASE_URL` / `XAI_BASE_URL`、`GROK_MODEL`（默认grok-4.3）。凭据文件可含一行密钥赋值及一行HTTPS API基础地址，也可只含密钥；默认地址为https://api.x.ai/v1。兼容网关通过相同配置使用，实际服务方由部署者选择。文件路径可用`--grok-credentials-file`显式传入；都没配时读本机`~/.qtou/grok-credentials`。密钥不写代码、草稿或日志；不要在shell命令里直接传密钥。现有Grok CLI登录不能代替API凭据。
+Grok支持 `GROK_API_KEY` / `XAI_API_KEY`、`GROK_BASE_URL` / `XAI_BASE_URL`、`GROK_MODEL`（默认grok-4.7）。凭据文件可含一行密钥赋值及一行HTTPS API基础地址，也可只含密钥；默认地址为https://api.x.ai/v1。兼容网关通过相同配置使用，实际服务方由部署者选择。文件路径可用`--grok-credentials-file`显式传入；都没配时读本机`~/.qtou/grok-credentials`。密钥不写代码、草稿或日志；不要在shell命令里直接传密钥。现有Grok CLI登录不能代替API凭据。
 
 有`TAVILY_API_KEY`或本机`~/.qtou/tavily-key`可省略sources-file，脚本自动执行两次公开搜索并提取正文。无key时，Bot用已连接Tavily插件search、extract并提供下述文件，不索取聊天明文密钥，不把search摘要冒充正文：
 

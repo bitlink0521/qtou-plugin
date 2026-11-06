@@ -20,7 +20,7 @@ python3 <插件根目录>/tools/project-enrichment/enrich.py \
   --output /absolute/draft.json
 ```
 
-可选`--existing-file /absolute/existing.json`、`--bp-text-file /absolute/bp.txt`、`--parsed-bp-file /absolute/parsed.json`、`--grok-credentials-file /absolute/credentials-file`。凭据默认读`~/.qtou/grok-credentials`，也可由`GROK_API_KEY_FILE`指定；模型默认`grok-4.3`，可用`GROK_MODEL`覆盖。Tavily key（`TAVILY_API_KEY`或`~/.qtou/tavily-key`）存在时可省`--sources-file`自动search+extract。Bot代存插件来源采用：
+可选`--existing-file /absolute/existing.json`、`--bp-text-file /absolute/bp.txt`、`--parsed-bp-file /absolute/parsed.json`、`--grok-credentials-file /absolute/credentials-file`。凭据默认读`~/.qtou/grok-credentials`，也可由`GROK_API_KEY_FILE`指定；模型默认`grok-4.7`，可用`GROK_MODEL`覆盖。Tavily key（`TAVILY_API_KEY`或`~/.qtou/tavily-key`）存在时可省`--sources-file`自动search+extract。Bot代存插件来源采用：
 
 ```json
 {
