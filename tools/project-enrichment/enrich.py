@@ -146,7 +146,8 @@ PROFILE_INSTRUCTIONS = ('只根据提供的公开网页正文补全指定公司�
         '来源冲突status=conflict，没找到status=unknown且value=null。不要猜行业字典、投资亮点或当前融资估值。'
         '注册资本/法人/成立日期/股东仅采权威工商或正式公告。city只采明确总部、所在地或注册地址城市，'
         '多个产业基地或服务覆盖城市不能推为公司所在地；不同来源冲突时city未知。'
-        '简介只写可核对业务事实，删去国内领先等宣传词；不要把整个公司简介段落当quote。'
+        'business的value必须是其quote中的连续原文片段（至少10字），不改写不概括。'
+    '简介只写可核对业务事实，删去国内领先等宣传词；不要把整个公司简介段落当quote。'
         '不提取私人联系方式、身份证号或非公开数据。简介可概括但每项事实须有依据。'
         'value最多1000字，无换行；fields每个字段最多一项。融资明确公告日期，不把历史轮次称当前轮次。')
 
@@ -221,6 +222,10 @@ def review(company, proposed, sources, existing):
                 authoritative(r['url']) and normalized(value) in normalized(r['quote']) for r in refs)):
             accepted = False
         if name == 'website' and not public_url(value):
+            accepted = False
+        # Mirrors the server gate for company fallback: business must be 10+ chars copied from a quote.
+        if name == 'business' and not (isinstance(value, str) and len(value) >= 10 and any(
+                normalized(value) in normalized(r['quote']) for r in refs)):
             accepted = False
         if name == 'city' and not (isinstance(value, str) and any(
                 normalized(value) in normalized(r['quote']) and
