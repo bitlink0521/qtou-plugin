@@ -41,7 +41,7 @@ def run(args,client=None):
   if bundle is None or (number==2 and not args.sources_file):
    try:bundle=research.collect(planned,bundle)
    except enrich.EnrichmentError as e:
-    if e.code=='TAVILY_PLUGIN_REQUIRED':return {'status':'research_required','round':number,'reason':str(e),'plan':str(out/'research-plan.json'),'businessWrites':0}
+    if e.code=='SEARCH_REQUIRED':return {'status':'research_required','round':number,'reason':str(e),'plan':str(out/'research-plan.json'),'businessWrites':0}
     raise
   save('sources',bundle)
   gaps=research.coverage(planned,bundle)

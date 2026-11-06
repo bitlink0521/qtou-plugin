@@ -9,6 +9,8 @@ GROUPS = {
  'disclosure': ('公告 年报 主营业务 商业模式 员工人数 高新技术企业 上市 荣誉', ('primaryBusiness','businessModel','staffNumber','nature','isMinorEnterprises','isHighNewEnterprises','isListing','honour','yewu')),
 }
 OFFICIAL = ['gsxt.gov.cn','cninfo.com.cn','neeq.com.cn','sse.com.cn','szse.cn']
+# Tavily (plugin or HTTP key), else whatever web search the calling agent has; bodies come from opened pages.
+SEARCH_SOURCES = ('tavily_plugin','tavily_http','agent_search')
 
 def missing(snapshot):
  return [r['field'] for r in snapshot['fields'] if r.get('value') is None or (isinstance(r.get('value'),str) and not r['value'].strip())]
@@ -38,13 +40,13 @@ def coverage(plan_value,bundle):
     t=datetime.fromisoformat(r.get('searchedAt',''))
     valid=t.tzinfo is not None and -300 <= (datetime.now().astimezone()-t).total_seconds() <= 86400
    except (ValueError,TypeError):valid=False
-   if valid and r.get('status')=='success' and type(r.get('hits')) is int and r['hits']>=0 and isinstance(r.get('urls'),list) and r.get('source') in ('tavily_plugin','tavily_http'):found.append(r)
+   if valid and r.get('status')=='success' and type(r.get('hits')) is int and r['hits']>=0 and isinstance(r.get('urls'),list) and r.get('source') in SEARCH_SOURCES:found.append(r)
   if not found: errors.append('query_missing_or_failed:'+q['queryId'])
  return errors
 
 def collect(plan_value, previous=None, request=enrich.request_json):
  key=qtou_shared.tavily_key()
- if not key:raise enrich.EnrichmentError('TAVILY_PLUGIN_REQUIRED','使用已连接Tavily插件完成research-plan.json后提供sources-file；无需聊天密钥')
+ if not key:raise enrich.EnrichmentError('SEARCH_REQUIRED','用已连接的Tavily或你自带的联网搜索完成research-plan.json后提供sources-file；无需聊天密钥')
  bundle=previous or {'companyName':plan_value['companyName'],'queries':[],'sources':[],'extractions':[]}
  seen={r['url'] for r in bundle['sources']}
  call=lambda url,payload:request(url,payload,key,'TAVILY')
