@@ -19,6 +19,9 @@ class WorkflowTests(unittest.TestCase):
   for bad in ({'status':'failed'},{'searchedAt':'2026-01-01'},{'source':'model_memory'},{'hits':False}):
    v=copy.deepcopy(b);v['queries'][0].update(bad);self.assertTrue(research.coverage(p,v))
   v=copy.deepcopy(b);v['queries'][1]['include_domains']=[];self.assertTrue(research.coverage(p,v))
+  v=copy.deepcopy(b)
+  for r in v['queries']:r['source']='agent_search'
+  self.assertEqual(research.coverage(p,v),[])
  def test_http_extract_failure_not_disguised_as_body_and_other_queries_continue(self):
   p=research.plan(SNAP);calls=[]
   def request(url,args,*unused):
