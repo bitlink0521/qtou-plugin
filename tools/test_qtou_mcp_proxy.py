@@ -557,3 +557,102 @@ class UnauthenticatedStdioDiscoveryTests(unittest.TestCase):
             except subprocess.TimeoutExpired:
                 proc.kill()
             home.cleanup()
+
+    def test_tools_list_content_length_framed_without_token_returns_local_tools(self):
+        """Grok/Cursor speak MCP stdio as Content-Length frames, not NDJSON."""
+        proxy_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'qtou_mcp_proxy.py')
+        home = tempfile.TemporaryDirectory()
+        env = {
+            'HOME': home.name,
+            'PATH': os.environ.get('PATH', '/usr/bin:/bin'),
+            'PYTHONUNBUFFERED': '1',
+            'PYTHONIOENCODING': 'utf-8',
+            'LC_ALL': os.environ.get('LC_ALL', 'C.UTF-8'),
+        }
+        self.assertNotIn('QTOU_LOGIN_PASSWORD', env)
+        self.assertNotIn('QTOU_LOGIN_USERNAME', env)
+        self.assertNotIn('QTOU_CONNECTOR_TOKEN', env)
+        proc = subprocess.Popen(
+            [sys.executable, '-u', proxy_path],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+        )
+
+        def send(message):
+            raw = json.dumps(message, ensure_ascii=False).encode('utf-8')
+            proc.stdin.write(('Content-Length: %d\r\n\r\n' % len(raw)).encode('ascii'))
+            proc.stdin.write(raw)
+            proc.stdin.flush()
+
+        def read_some(n=None, line=False, timeout=15):
+            holder = []
+
+            def target():
+                if line:
+                    buf = bytearray()
+                    while True:
+                        chunk = proc.stdout.read(1)
+                        if not chunk:
+                            break
+                        buf.extend(chunk)
+                        if chunk == b'\n':
+                            break
+                    holder.append(bytes(buf))
+                else:
+                    holder.append(proc.stdout.read(n))
+
+            thread = threading.Thread(target=target)
+            thread.daemon = True
+            thread.start()
+            thread.join(timeout)
+            if thread.is_alive():
+                self.fail('proxy did not reply within %s seconds' % timeout)
+            return holder[0] if holder else b''
+
+        def recv(timeout=15):
+            length = None
+            while True:
+                header = read_some(line=True, timeout=timeout)
+                if header == b'':
+                    self.fail('proxy closed stdout without a framed reply')
+                if header in (b'\n', b'\r\n'):
+                    break
+                if header.lower().startswith(b'content-length:'):
+                    length = int(header.split(b':', 1)[1].strip())
+            self.assertIsNotNone(length, 'proxy reply was not Content-Length framed')
+            raw = read_some(n=length, timeout=timeout)
+            self.assertEqual(len(raw), length, 'framed body shorter than Content-Length')
+            return json.loads(raw.decode('utf-8'))
+
+        try:
+            send({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize',
+                  'params': {'protocolVersion': '2024-11-05', 'capabilities': {},
+                             'clientInfo': {'name': 'toolslist-framing', 'version': '0'}}})
+            send({'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list', 'params': {}})
+            initialized = recv()
+            self.assertEqual(initialized.get('id'), 1)
+            self.assertNotEqual((initialized.get('error') or {}).get('code'), -32001)
+            self.assertIn('result', initialized)
+            listed = recv()
+            self.assertEqual(listed.get('id'), 2)
+            self.assertNotIn('error', listed)
+            self.assertNotEqual((listed.get('error') or {}).get('code'), -32001)
+            tools = listed['result']['tools']
+            names = [tool['name'] for tool in tools]
+            self.assertEqual(set(names), self.LOCAL_NAMES)
+            self.assertEqual(len(tools), 4)
+        finally:
+            for stream in (proc.stdin, proc.stdout, proc.stderr):
+                if stream:
+                    try:
+                        stream.close()
+                    except Exception:
+                        pass
+            proc.kill()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+            home.cleanup()
