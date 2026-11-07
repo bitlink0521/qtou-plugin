@@ -34,6 +34,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 
 import qtou_shared
 from qtou_shared import MIGRATED_ACCOUNT_NAME, parse_mcp_body, write_private
@@ -94,6 +95,28 @@ LOCAL_TOOLS = [
      'inputSchema': {'type': 'object', 'properties': {'username': {'type': 'string', 'description': '要退出的账号用户名'}}}},
 ]
 LOCAL_TOOL_NAMES = {tool['name'] for tool in LOCAL_TOOLS}
+DEVICE_ID_PATH = os.path.expanduser('~/.qtou/device-id')
+TOOLS_CACHE_PATH = os.path.expanduser('~/.qtou/tools-cache.json')
+TOOLS_SNAPSHOT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'qtou_tools_snapshot.json')
+
+
+def known_upstream_tools():
+    """Business tools from the last signed-in tools/list, else the snapshot shipped with the plugin."""
+    for path in (TOOLS_CACHE_PATH, TOOLS_SNAPSHOT_PATH):
+        try:
+            with open(path) as handle:
+                tools = json.load(handle)
+        except (OSError, ValueError):
+            continue
+        if isinstance(tools, list) and tools:
+            return tools
+    return []
+
+
+def remember_upstream_tools(tools):
+    upstream = [tool for tool in tools if isinstance(tool, dict) and tool.get('name') not in LOCAL_TOOL_NAMES]
+    if upstream:
+        write_private(TOOLS_CACHE_PATH, json.dumps(upstream, ensure_ascii=False))
 
 
 class LoginCancelled(Exception):
@@ -254,8 +277,22 @@ def ask_credentials(hint, use_terminal):
     return username, ask_dialog('请输入轻投密码', hidden=True)
 
 
+def client_name():
+    """Per-device client name: the server revokes older keys of the same user+client, so a login on
+    one device (e.g. a cloud bot) must not sign out the same account on another."""
+    try:
+        with open(DEVICE_ID_PATH) as handle:
+            device_id = handle.read().strip()
+    except OSError:
+        device_id = ''
+    if not device_id:
+        device_id = uuid.uuid4().hex[:12]
+        write_private(DEVICE_ID_PATH, device_id)
+    return 'qtou-mcp-proxy-' + device_id
+
+
 def sign_key(username, password):
-    body = urllib.parse.urlencode({'username': username, 'password': password, 'client': 'qtou-mcp-proxy'}).encode()
+    body = urllib.parse.urlencode({'username': username, 'password': password, 'client': client_name()}).encode()
     try:
         with urllib.request.urlopen(urllib.request.Request(LOGIN_URL, data=body, method='POST'), timeout=20) as response:
             data = json.load(response)
@@ -478,6 +515,7 @@ def with_local_tools(replies):
     for reply in replies:
         tools = (reply.get('result') or {}).get('tools') if isinstance(reply, dict) else None
         if isinstance(tools, list):
+            remember_upstream_tools(tools)
             tools.extend(LOCAL_TOOLS)
     return replies
 
@@ -527,10 +565,11 @@ def handle(message):
             replies = [{'jsonrpc': '2.0', 'id': message.get('id'),
                         'result': call_local_tool(params['name'], params.get('arguments') or {})}]
         elif method == 'tools/list':
-            # Discovery must not block on login: return local account tools only until a key exists.
+            # Discovery must not block on login, and many hosts never refetch after list_changed:
+            # list the known business tools up front; calling one before login returns AUTH_REQUIRED.
             if not read_token():
                 replies = [{'jsonrpc': '2.0', 'id': message.get('id'),
-                            'result': {'tools': list(LOCAL_TOOLS)}}]
+                            'result': {'tools': known_upstream_tools() + LOCAL_TOOLS}}]
             else:
                 replies = with_local_tools(forward(message))
         elif method in ('resources/list', 'prompts/list') and not read_token():
