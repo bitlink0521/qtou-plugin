@@ -176,8 +176,11 @@ def save_account(username, key, key_id):
 
 
 def reset_upstream():
+    """Account changed: drop the upstream session and tell the client its tool list changed."""
     session['id'] = None
     session['upstream_ready'] = False
+    if session['initialize']:
+        emit({'jsonrpc': '2.0', 'method': 'notifications/tools/list_changed'})
 
 
 def emit(message):
@@ -483,7 +486,7 @@ def local_initialize(message):
     params = message.get('params') or {}
     return {'jsonrpc': '2.0', 'id': message.get('id'), 'result': {
         'protocolVersion': params.get('protocolVersion') or '2024-11-05',
-        'capabilities': {'tools': {}},
+        'capabilities': {'tools': {'listChanged': True}},
         'serverInfo': {'name': 'qtou-agent-mcp', 'version': 'proxy'},
     }}
 
@@ -498,6 +501,10 @@ def initialize(message):
         if not is_auth_failure(status, replies):
             session['upstream_ready'] = True
             for reply in replies:
+                capabilities = (reply.get('result') or {}).get('capabilities') if isinstance(reply, dict) else None
+                if isinstance(capabilities, dict):
+                    tools = capabilities.get('tools')
+                    capabilities['tools'] = dict(tools if isinstance(tools, dict) else {}, listChanged=True)
                 emit(reply)
             return
     emit(local_initialize(message))
