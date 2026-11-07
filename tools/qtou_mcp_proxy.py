@@ -94,6 +94,27 @@ LOCAL_TOOLS = [
      'inputSchema': {'type': 'object', 'properties': {'username': {'type': 'string', 'description': '要退出的账号用户名'}}}},
 ]
 LOCAL_TOOL_NAMES = {tool['name'] for tool in LOCAL_TOOLS}
+TOOLS_CACHE_PATH = os.path.expanduser('~/.qtou/tools-cache.json')
+TOOLS_SNAPSHOT_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'qtou_tools_snapshot.json')
+
+
+def known_upstream_tools():
+    """Business tools from the last signed-in tools/list, else the snapshot shipped with the plugin."""
+    for path in (TOOLS_CACHE_PATH, TOOLS_SNAPSHOT_PATH):
+        try:
+            with open(path) as handle:
+                tools = json.load(handle)
+        except (OSError, ValueError):
+            continue
+        if isinstance(tools, list) and tools:
+            return tools
+    return []
+
+
+def remember_upstream_tools(tools):
+    upstream = [tool for tool in tools if isinstance(tool, dict) and tool.get('name') not in LOCAL_TOOL_NAMES]
+    if upstream:
+        write_private(TOOLS_CACHE_PATH, json.dumps(upstream, ensure_ascii=False))
 
 
 class LoginCancelled(Exception):
@@ -176,8 +197,11 @@ def save_account(username, key, key_id):
 
 
 def reset_upstream():
+    """Account changed: drop the upstream session and tell the client its tool list changed."""
     session['id'] = None
     session['upstream_ready'] = False
+    if session['initialize']:
+        emit({'jsonrpc': '2.0', 'method': 'notifications/tools/list_changed'})
 
 
 def emit(message):
@@ -475,6 +499,7 @@ def with_local_tools(replies):
     for reply in replies:
         tools = (reply.get('result') or {}).get('tools') if isinstance(reply, dict) else None
         if isinstance(tools, list):
+            remember_upstream_tools(tools)
             tools.extend(LOCAL_TOOLS)
     return replies
 
@@ -483,7 +508,7 @@ def local_initialize(message):
     params = message.get('params') or {}
     return {'jsonrpc': '2.0', 'id': message.get('id'), 'result': {
         'protocolVersion': params.get('protocolVersion') or '2024-11-05',
-        'capabilities': {'tools': {}},
+        'capabilities': {'tools': {'listChanged': True}},
         'serverInfo': {'name': 'qtou-agent-mcp', 'version': 'proxy'},
     }}
 
@@ -498,6 +523,10 @@ def initialize(message):
         if not is_auth_failure(status, replies):
             session['upstream_ready'] = True
             for reply in replies:
+                capabilities = (reply.get('result') or {}).get('capabilities') if isinstance(reply, dict) else None
+                if isinstance(capabilities, dict):
+                    tools = capabilities.get('tools')
+                    capabilities['tools'] = dict(tools if isinstance(tools, dict) else {}, listChanged=True)
                 emit(reply)
             return
     emit(local_initialize(message))
@@ -520,10 +549,11 @@ def handle(message):
             replies = [{'jsonrpc': '2.0', 'id': message.get('id'),
                         'result': call_local_tool(params['name'], params.get('arguments') or {})}]
         elif method == 'tools/list':
-            # Discovery must not block on login: return local account tools only until a key exists.
+            # Discovery must not block on login, and many hosts never refetch after list_changed:
+            # list the known business tools up front; calling one before login returns AUTH_REQUIRED.
             if not read_token():
                 replies = [{'jsonrpc': '2.0', 'id': message.get('id'),
-                            'result': {'tools': list(LOCAL_TOOLS)}}]
+                            'result': {'tools': known_upstream_tools() + LOCAL_TOOLS}}]
             else:
                 replies = with_local_tools(forward(message))
         elif method in ('resources/list', 'prompts/list') and not read_token():
