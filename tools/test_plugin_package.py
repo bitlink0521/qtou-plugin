@@ -131,6 +131,7 @@ class PackageTests(unittest.TestCase):
         expected = [item['name'] for item in catalog['tools']] + [
             'qtou_account_list', 'qtou_account_add', 'qtou_account_switch', 'qtou_account_logout']
         self.assertEqual(len(expected), 36)
+        HitServer.hits = []
         env = {
             'HOME': home,
             'PATH': os.environ.get('PATH', '/usr/bin:/bin'),
@@ -149,11 +150,15 @@ class PackageTests(unittest.TestCase):
             text=True,
         )
         try:
-            proc.stdin.write(json.dumps({'jsonrpc': '2.0', 'id': 1, 'method': 'tools/list'}) + '\n')
+            proc.stdin.write(json.dumps({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize',
+                                         'params': {'protocolVersion': '2024-11-05', 'capabilities': {}}}) + '\n')
+            proc.stdin.write(json.dumps({'jsonrpc': '2.0', 'method': 'notifications/initialized'}) + '\n')
+            proc.stdin.write(json.dumps({'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list'}) + '\n')
             proc.stdin.flush()
+            initialized = json.loads(proc.stdout.readline())
             listed = json.loads(proc.stdout.readline())
             proc.stdin.write(json.dumps({
-                'jsonrpc': '2.0', 'id': 2, 'method': 'tools/call',
+                'jsonrpc': '2.0', 'id': 3, 'method': 'tools/call',
                 'params': {'name': 'agent_health', 'arguments': {}},
             }) + '\n')
             proc.stdin.flush()
@@ -165,6 +170,9 @@ class PackageTests(unittest.TestCase):
             shutil.rmtree(packed, ignore_errors=True)
             shutil.rmtree(home, ignore_errors=True)
         self.assertEqual(HitServer.hits, [])
+        self.assertEqual(initialized['id'], 1)
+        self.assertEqual(initialized['result']['serverInfo']['name'], 'qtou-agent-mcp')
+        self.assertEqual(listed['id'], 2)
         self.assertEqual([item['name'] for item in listed['result']['tools']], expected)
         self.assertTrue(all(item.get('description') and isinstance(item.get('inputSchema'), dict)
                             for item in listed['result']['tools']))

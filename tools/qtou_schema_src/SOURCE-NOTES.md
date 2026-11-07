@@ -9,6 +9,4 @@
 - AgentBpService.evidenceSchema() 使用同文件静态 FIELDS、object/array/schemaTree/obj 等辅助；不要仅截157–167行丢掉静态字段与辅助实现。
 - AgentRiskMcpTools.defs() 的 schema 在同文件构造，不需要调用其业务方法或注入业务服务。
 
-本包为七份未改写原始Java源码与SHA256清单；没有生成目录或执行服务，未请求真实后端。schema构造的直接源依赖已归档；编译完整业务类的非schema依赖不在本包。
-
-最新范围：10:21（Asia/Shanghai）恢复A；随包完整name/description/inputSchema，首次离线tools/list零HTTP且无后端发现fallback；业务保留鉴权；README同修改集；禁止现场操作及提交。HQ进度工具未在本执行器可用，需父代理同步 eng-qtou-tools-anon-list progress。
+本包为七份未改写原始Java源码与SHA256清单。`tools/generate_qtou_tool_catalog.py` 按上述组装顺序生成 `tools/qtou_tool_catalog.json`，并写入这些源文件的 SHA256。缺直接依赖、哈希不符或 schema 解析不完整时生成器退出，不写出残缺目录。

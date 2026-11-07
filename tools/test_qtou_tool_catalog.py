@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -319,6 +320,7 @@ class UpstreamFailureTests(unittest.TestCase):
         self.saved = open(self.accounts, 'rb').read()
         proxy.session.update(id=None, initialize=None, upstream_ready=False, client_form=False)
         ModeQtou.hits = []
+        ModeQtou.methods = []
 
     def tearDown(self):
         for patch in self.path_patches:
@@ -379,10 +381,77 @@ class UpstreamFailureTests(unittest.TestCase):
             self.assertEqual(proxy.read_token(), self.key)
             self.assertNotEqual(reply['error'].get('data', {}).get('code'), 'AUTH_REQUIRED')
 
+    def test_saved_key_blocking_urlopen_keeps_initialize_and_tools_list_local(self):
+        called = []
+
+        def block(*args, **kwargs):
+            called.append(1)
+            time.sleep(5)
+            raise OSError('upstream blocked')
+
+        emitted = []
+        started = time.monotonic()
+        with mock.patch('urllib.request.urlopen', side_effect=block), \
+                mock.patch.object(proxy, 'emit', side_effect=emitted.append), \
+                mock.patch.object(proxy, 'ask_credentials') as ask:
+            proxy.initialize({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize',
+                              'params': {'protocolVersion': '2024-11-05', 'capabilities': {'tools': {}}}})
+            proxy.handle({'jsonrpc': '2.0', 'method': 'notifications/initialized'})
+            proxy.handle({'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list'})
+        self.assertLess(time.monotonic() - started, 1)
+        ask.assert_not_called()
+        self.assertEqual(called, [])
+        self.assertFalse(proxy.session['upstream_ready'])
+        self.assertEqual(emitted[0]['id'], 1)
+        self.assertEqual(emitted[0]['result']['serverInfo']['name'], 'qtou-agent-mcp')
+        self.assertNotIn('tools', emitted[0]['result'])
+        tools = emitted[1]['result']['tools']
+        self.assertEqual(len(tools), 36)
+        self.assertEqual([item['name'] for item in tools], [item['name'] for item in load_catalog()['tools']] + LOCAL_NAMES)
+        self.assertEqual(len(emitted), 2)
+
+    def test_first_business_call_sends_initialize_before_the_call(self):
+        ModeQtou.mode = 'ok'
+        emitted = []
+        with mock.patch.object(proxy, 'emit', side_effect=emitted.append), \
+                mock.patch.object(proxy, 'ask_credentials') as ask:
+            proxy.initialize({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize',
+                              'params': {'protocolVersion': '2024-11-05', 'capabilities': {}}})
+            self.assertFalse(proxy.session['upstream_ready'])
+            proxy.handle({'jsonrpc': '2.0', 'method': 'notifications/initialized'})
+            proxy.handle({'jsonrpc': '2.0', 'id': 3, 'method': 'tools/call',
+                          'params': {'name': 'agent_health', 'arguments': {}}})
+        ask.assert_not_called()
+        self.assertEqual(ModeQtou.methods, ['initialize', 'notifications/initialized', 'tools/call'])
+        self.assertTrue(proxy.session['upstream_ready'])
+        self.assertEqual(emitted[-1]['result'], {'ok': True, 'service': 'fake'})
+
+    def test_short_password_and_nested_secrets_are_not_returned_or_logged(self):
+        ModeQtou.mode = 'leak'
+        short = 'abc123'
+        nested = 'qtpat_nestedtok'
+        emitted, logs = [], []
+        with mock.patch.dict(os.environ, {'QTOU_LOGIN_PASSWORD': short}), \
+                mock.patch.object(proxy, 'emit', side_effect=emitted.append), \
+                mock.patch.object(proxy, 'log', side_effect=logs.append), \
+                mock.patch.object(proxy, 'ask_credentials') as ask:
+            proxy.handle({'jsonrpc': '2.0', 'id': 8, 'method': 'tools/call',
+                          'params': {'name': 'agent_health', 'arguments': {
+                              'nested': {'token': nested, 'password': short}}}})
+        ask.assert_not_called()
+        reply = emitted[0]
+        self.assertEqual(reply['error']['code'], -32603)
+        self.assertEqual(reply['error']['message'], proxy.UPSTREAM_ERROR_MESSAGE)
+        self.assertEqual(set(reply['error']['data']), {'code', 'httpStatus'})
+        blob = json.dumps(emitted, ensure_ascii=False) + '\n' + '\n'.join(str(item) for item in logs)
+        for secret in (short, nested, self.key, 'Bearer ' + self.key, self.sentinel):
+            self.assertNotIn(secret, blob)
+
 
 class ModeQtou(BaseHTTPRequestHandler):
     mode = '500-empty-tools'
     hits = []
+    methods = []
 
     def log_message(self, *args):
         pass
@@ -395,9 +464,21 @@ class ModeQtou(BaseHTTPRequestHandler):
             self.send_json(500, {'msg': 'login must not run'})
             return
         message = json.loads(body.decode() or '{}')
+        ModeQtou.methods.append(message.get('method'))
         echo = (self.headers.get('Authorization') or '') + ' pw-sentinel-not-real-xyz'
         mode = ModeQtou.mode
-        if mode == '500-empty-tools':
+        if mode == 'ok':
+            self.send_json(200, {'jsonrpc': '2.0', 'id': message.get('id'), 'result': {'ok': True, 'service': 'fake'}})
+        elif mode == 'leak':
+            self.send_json(200, {'jsonrpc': '2.0', 'id': message.get('id'), 'error': {
+                'code': -32603,
+                'message': echo + ' abc123',
+                'data': {
+                    'password': 'abc123',
+                    'nested': {'token': 'qtpat_nestedtok', 'authorization': self.headers.get('Authorization') or ''},
+                },
+            }})
+        elif mode == '500-empty-tools':
             self.send_json(500, {'jsonrpc': '2.0', 'id': message.get('id'), 'result': {'tools': []}, 'echo': echo})
         elif mode == '500-empty':
             self.send_response(500)

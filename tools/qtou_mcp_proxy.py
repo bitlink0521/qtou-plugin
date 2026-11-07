@@ -4,8 +4,10 @@
 The client (e.g. Codex) launches this as a stdio MCP server. tools/list is answered from the shipped
 catalog in qtou_tool_catalog.json plus the four local account tools, and does not contact the server.
 A business tools/call still needs a saved key and is posted to QTOU_MCP_URL. With no saved key the
-call returns AUTH_REQUIRED and does not post. An HTTP error or a JSON-RPC error from the server is
-returned as that error: it is not rewritten into a successful tool list and it does not start a login.
+call returns AUTH_REQUIRED and does not post. The initialize handshake is always local. The first
+business call sends the saved initialize to the server before that call. An HTTP error or a
+JSON-RPC error is returned with the numeric code and a fixed message. The upstream message, data,
+and raw body are not copied, and the failure does not start a login.
 
 Host bots should collect credentials with a chat secret-request (mask box) and/or
 RequestUserForm, then call qtou_account_add. Args win over env QTOU_LOGIN_PASSWORD
@@ -331,6 +333,12 @@ def ask_credentials(hint, use_terminal):
     return username, ask_dialog('请输入轻投密码', hidden=True)
 
 
+def _hide_secret(text, secret):
+    if isinstance(text, str) and isinstance(secret, str) and secret:
+        return text.replace(secret, '***')
+    return text
+
+
 def sign_key(username, password):
     body = urllib.parse.urlencode({'username': username, 'password': password, 'client': 'qtou-mcp-proxy'}).encode()
     try:
@@ -340,14 +348,14 @@ def sign_key(username, password):
         try:
             data = json.load(error)
         except ValueError:
-            return None, None, '登录失败（HTTP %s）' % error.code
+            return None, None, _hide_secret('登录失败（HTTP %s）' % error.code, password)
     except (urllib.error.URLError, OSError):
         return None, None, '连不上轻投服务，请检查网络'
     payload = data.get('data') or data
     key = payload.get('agentKey') or ''
     if key.startswith('qtpat_'):
         return key, payload.get('agentKeyId'), None
-    return None, None, str(data.get('msg') or payload.get('message') or '用户名或密码不对')
+    return None, None, _hide_secret(str(data.get('msg') or payload.get('message') or '用户名或密码不对'), password)
 
 
 def login(use_terminal=False, reason=''):
@@ -415,34 +423,20 @@ def _jsonrpc_errors(replies):
     return found
 
 
-def _secrets(message, token):
-    found = [token, env_login_password()]
-    params = message.get('params') if isinstance(message, dict) else None
-    arguments = params.get('arguments') if isinstance(params, dict) else None
-    if isinstance(arguments, dict):
-        for name in ('password', 'token', 'authorization'):
-            found.append(arguments.get(name))
-    return found
+UPSTREAM_ERROR_MESSAGE = '轻投服务拒绝了这次调用'
 
 
-def _redact(value, secrets):
-    secrets = sorted({item for item in secrets if isinstance(item, str) and len(item) >= 8}, key=len, reverse=True)
-    if isinstance(value, str):
-        for secret in secrets:
-            value = value.replace(secret, '***')
-        return value
-    if isinstance(value, list):
-        return [_redact(item, secrets) for item in value]
-    if isinstance(value, dict):
-        return {key: _redact(item, secrets) for key, item in value.items()}
-    return value
-
-
-def upstream_failure_reply(message, status, replies, secrets):
-    """Keep a JSON-RPC error. An HTTP failure is never a successful result."""
+def upstream_failure_reply(message, status, replies):
+    """Return a code and a fixed message. Never copy the upstream body."""
     errors = _jsonrpc_errors(replies)
     if errors:
-        return {'jsonrpc': '2.0', 'id': message.get('id'), 'error': _redact(errors[0], secrets)}
+        code = errors[0].get('code')
+        if isinstance(code, bool) or not isinstance(code, int):
+            code = -32002
+        data = {'code': 'UPSTREAM_ERROR'}
+        if isinstance(status, int) and status:
+            data['httpStatus'] = status
+        return error_reply(message, code, UPSTREAM_ERROR_MESSAGE, data)
     if isinstance(status, int) and status >= 400:
         text = '轻投服务返回 HTTP %s' % status
     else:
@@ -466,14 +460,13 @@ def initialize_upstream(token):
 
 def forward(message):
     token = ensure_token()
-    secrets = _secrets(message, token)
     if session['initialize'] and not session['upstream_ready']:
         status, replies = initialize_upstream(token)
         if not session['upstream_ready']:
-            return [upstream_failure_reply(message, status, replies, secrets)]
+            return [upstream_failure_reply(message, status, replies)]
     status, replies = post(message, token)
     if status >= 400 or not replies or _jsonrpc_errors(replies):
-        return [upstream_failure_reply(message, status, replies, secrets)]
+        return [upstream_failure_reply(message, status, replies)]
     return replies
 
 
@@ -609,20 +602,10 @@ def local_initialize(message):
 
 
 def initialize(message):
-    """Answer initialize without logging in: forms can only be shown after the handshake completes."""
+    """Always answer locally. Upstream initialize runs on the first business call."""
     session['initialize'] = message
+    session['upstream_ready'] = False
     session['client_form'] = 'elicitation' in ((message.get('params') or {}).get('capabilities') or {})
-    token = read_token()
-    if token:
-        try:
-            status, replies = post(message, token)
-        except (urllib.error.URLError, OSError, ValueError):
-            status, replies = None, []
-        if isinstance(status, int) and status < 400 and replies and not _jsonrpc_errors(replies):
-            session['upstream_ready'] = True
-            for reply in replies:
-                emit(reply)
-            return
     emit(local_initialize(message))
 
 

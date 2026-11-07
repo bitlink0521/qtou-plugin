@@ -27,6 +27,12 @@
 
 清单指向技能目录，不等于某个客户端进程已经把技能加载进当前会话。
 
+## 上游错误契约
+
+业务调用遇到 HTTP 错误或 JSON-RPC error 时，返回数值 `error.code`（不是整数则用 `-32002`）和固定句「轻投服务拒绝了这次调用」或「轻投服务返回 HTTP <状态码>」。不复制上游的 `message`、`data` 或原始正文。因此 6 位密码、嵌套 token、Bearer 值和环境变量密码即使被上游回显，也不会进入返回值或日志。
+
+宿主 `initialize` 只在本地立即回答，不访问网络。客户端随后的 `notifications/initialized` 在上游会话尚未建立时不转发。第一次业务调用才按顺序发送已保存的 `initialize`、`notifications/initialized`，然后再发送这次业务调用。
+
 ## 安装命令从哪来
 
 `README.md` 里的 Codex 两条命令和 Grok CLI 命令，与本仓库 `50036a9` 的用户说明相同：
