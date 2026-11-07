@@ -65,6 +65,16 @@ AUTH_REQUIRED_MESSAGE = (
     '写入后调用 agent_health 冒烟。'
 )
 
+def plugin_version():
+    try:
+        with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'plugin-meta.json')) as handle:
+            return json.load(handle).get('version') or 'unknown'
+    except (OSError, ValueError):
+        return 'unknown'
+
+
+# The server's audit marks generic script user agents (Python-urllib, curl…) as direct HTTP; name the proxy instead.
+USER_AGENT = 'qtou-mcp-proxy/' + plugin_version()
 write_lock = threading.Lock()
 login_lock = threading.Lock()
 session = {'id': None, 'initialize': None, 'upstream_ready': False, 'client_form': False}
@@ -328,7 +338,7 @@ def revoke_key(key, key_id):
 
 
 def post(message, token):
-    headers = {'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream',
+    headers = {'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream', 'User-Agent': USER_AGENT,
                'Authorization': 'Bearer ' + token}
     if session['id']:
         headers['Mcp-Session-Id'] = session['id']
