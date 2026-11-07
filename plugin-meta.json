@@ -1,6 +1,6 @@
 {
   "name": "qtou",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "marketplace": "qtou-plugin",
   "description": "连接轻投：BP 入池、尽调检索、投后风险预警三场景，首次使用登录、支持多账号。",
   "author": {"name": "Bitilinks", "email": "support@handsels.com"},
