@@ -15,7 +15,7 @@ description: >-
 **首登流程（宿主 bot）**：
 
 1. 已连且冒烟（`agent_health`）通则结束。
-2. 未登录：宿主先发聊天里的 `secret-request` 掩码框，把密码写入环境变量 `QTOU_LOGIN_PASSWORD`（可选同时写入 `QTOU_LOGIN_USERNAME`，或用非密方式询问用户名）。**每个 bot 必须使用自己发起的 secret-request**，不能沿用其他 bot 写入的变量。secret-request 写入的是发起该请求的那个 bot 的 `process.env`；stdio 代理在启动时才能读到这些变量，所以填写后若代理是早就拉起的，需要重装/重连该 MCP 后再调用登录工具。
+2. 未登录：**先问用户名，再收密码**。先在聊天里问轻投用户名（用户名不是密钥，可以明文回答）；用户回答后，宿主再发 `secret-request` 掩码框，把密码写入环境变量 `QTOU_LOGIN_PASSWORD`，填完直接进入第 3 步登录，不要再回头问用户名。**每个 bot 必须使用自己发起的 secret-request**，不能沿用其他 bot 写入的变量。secret-request 写入的是发起该请求的那个 bot 的 `process.env`；stdio 代理在启动时才能读到这些变量，所以填写后若代理是早就拉起的，需要重装/重连该 MCP 后再调用登录工具。
 3. 再调用 `qtou_account_add`（可以只传 `username`，或不传 password）。代理取凭据的优先级是：工具参数 > 环境变量 `QTOU_LOGIN_PASSWORD` / `QTOU_LOGIN_USERNAME` > Codex elicitation。三者都没有则返回 `AUTH_REQUIRED`，并提示宿主用 secret-request（变量名 `QTOU_LOGIN_PASSWORD`）。
 4. 代理把账密 POST 到写死的代签 URL `http://113.250.189.74:18081/api/v1/agent/auth/login`（站点和 URL 不允许覆盖），只把返回的 key 写入本机 `~/.qtou/`，不写密码。登录成功后**不清除**环境变量。密码不进日志、不进报错、不进返回值。若连接器是 HTTP，也可由宿主把账密 POST 到代签地址，将返回的 `agentKey` 写入插件变量 `QTOU_CONNECTOR_TOKEN`（key 永不进聊天）。然后 `agent_health` 冒烟。登录、切换或退出账号后代理会发 `notifications/tools/list_changed`，宿主应重新拉取工具列表；若登录后仍只有 `qtou_account_*` 四个工具，重连该 MCP 后再继续，不要因此判定入池不可用。
 5. Codex / WorkBuddy / Grok 命令行补充路径：插件的 `qtou` 连接由 `tools/qtou_mcp_proxy.py` 启动。没有可用账号、没有环境变量、也没有传入参数时，它仍可请客户端弹出 MCP 表单（不支持表单的客户端改用 macOS 对话框），签发后保存在本机 `~/.qtou/`，之后自动复用。表单内容只回给启动器，不进聊天。这不是宿主 bot 的默认路径。若返回 `AUTH_REQUIRED` / `-32001`，改由宿主发 secret-request，不要循环空参 `qtou_account_add`。
