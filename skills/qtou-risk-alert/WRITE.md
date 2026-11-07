@@ -15,8 +15,9 @@
 
 - **外网出处** `{ title, url, date, excerpt }`：`url` 是本轮亲自打开过的完整 ASCII 链接（中文要百分号编码）；`date` 必填，是 `YYYY-MM-DD` 发布日期（「近日」、缺日期、不存在的日期会被拒）；`excerpt` ≤200 字逐字摘录。
 - **财务出处** `{ recordId, field, value, formula }`，四项都必填：`recordId` 是 finance 行的 `id`；`field` 只写纯列名（如 `business_income`、`net_assets`、`total_assets`、`net_profit`），不带季度、不带 `=值`；`value` 照 `agent_portfolio_quarterly` 返回的原值抄；`formula` 写本条用到的算式，如 `(32000000−14400000)÷32000000=55%`。季度只写在确认卡的「季度」栏。
+- **季报缺报出处** `{ kind: "missing_quarterly_report", quarter: "2026Q3" }`：只用于「季报逾期未报」，不填 url 和财务四项。服务端按租户阈值自己算截止日、核对该季没有任何季报记录，未过截止日或已有记录都会拒；风险发生日期取截止日（不用传 `eventDate`）。
 - **意见结论 `conclusion`**：只写结论正文，≤300 字；不带网址、不带「[1]」索引或「出处：」段（服务端会自动加固定头「AI 预警初判，需投后经理复核」和出处索引）。等级、类型、日期不用拼进去。
-- **风险发生日期**：是事件日期，不是写入日。全是外网出处取最早发布日，全是财务出处取本期报告期末（2026Q3 → 2026-09-30）；外网和财务混合时必须传 `eventDate`，且它必须等于某条出处的日期、不晚于今天。
+- **风险发生日期**：是事件日期，不是写入日。全是外网出处取最早发布日，全是财务出处取本期报告期末（2026Q3 → 2026-09-30），有季报缺报出处取截止日；外网和财务混合时必须传 `eventDate`，且它必须等于某条出处的日期、不晚于今天。
 - `riskType` 由服务端映射到网页字典；`state` 默认不传（网页显示为未设置），员工明确要求时才传 `relieve|ignore|follow_up|alarm`。可选值用 `agent_dicts({ type: "risk_grade" | "risk_state" | "risk_type" })` 查，不自己编。
 
 ## 服务端会复核，按返回改
