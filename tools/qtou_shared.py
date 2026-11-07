@@ -1,8 +1,10 @@
 """Helpers shared by every plugin tool: no-redirect JSON HTTP, Tavily, Grok structured output and the
 local qtou account store. Standard library only. Callers keep their own error types and map HttpFailure."""
+import fcntl
 import json
 import os
 import re
+import tempfile
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -32,6 +34,11 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
 
 def no_redirect_opener():
     return urllib.request.build_opener(NoRedirect()).open
+
+
+def open_without_redirect(request, timeout):
+    """One HTTP policy for this package: do not follow redirects."""
+    return no_redirect_opener()(request, timeout=timeout)
 
 
 class HttpFailure(RuntimeError):
@@ -155,11 +162,45 @@ def grok_structured(request, base, model, instructions, user_payload, schema_nam
 
 # Local qtou account store (~/.qtou, mode 600). The current account's key is mirrored to TOKEN_PATH.
 
+def ensure_private_dir(directory):
+    if os.path.islink(directory):
+        raise PermissionError('凭据目录是符号链接，已拒绝写入')
+    os.makedirs(directory, mode=0o700, exist_ok=True)
+    os.chmod(directory, 0o700)
+
+
 def write_private(path, text):
-    os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, 'w') as handle:
-        handle.write(text)
+    """Atomically replace path with a 0600 file. Refuse to follow a symlink."""
+    path = os.path.abspath(path)
+    directory = os.path.dirname(path)
+    ensure_private_dir(directory)
+    if os.path.islink(path):
+        raise PermissionError('凭据文件是符号链接，已拒绝写入')
+    fd, tmp = tempfile.mkstemp(prefix='.qtou-', dir=directory)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, 'w') as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, path)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+    os.chmod(path, 0o600)
+
+
+def _account_lock(accounts_path):
+    directory = os.path.dirname(os.path.abspath(accounts_path))
+    ensure_private_dir(directory)
+    lock_path = os.path.join(directory, '.account.lock')
+    fd = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+    os.chmod(lock_path, 0o600)
+    fcntl.flock(fd, fcntl.LOCK_EX)
+    return fd
 
 
 def read_legacy_token(token_path=None):
@@ -171,8 +212,7 @@ def read_legacy_token(token_path=None):
     return token if token.startswith('qtpat_') else ''
 
 
-def load_accounts(accounts_path=None, token_path=None):
-    accounts_path = accounts_path or ACCOUNTS_PATH
+def _load_accounts_unlocked(accounts_path, token_path):
     try:
         with open(accounts_path) as handle:
             data = json.load(handle)
@@ -182,21 +222,47 @@ def load_accounts(accounts_path=None, token_path=None):
             return {'current': None, 'accounts': {}}
         data = {'current': MIGRATED_ACCOUNT_NAME,
                 'accounts': {MIGRATED_ACCOUNT_NAME: {'key': legacy, 'keyId': None, 'savedAt': None}}}
-        store_accounts(data, accounts_path, token_path)
+        _store_accounts_unlocked(data, accounts_path, token_path)
     data.setdefault('accounts', {})
     if data.get('current') not in data['accounts']:
         data['current'] = next(iter(data['accounts']), None)
     return data
 
 
-def store_accounts(data, accounts_path=None, token_path=None):
-    token_path = token_path or TOKEN_PATH
-    write_private(accounts_path or ACCOUNTS_PATH, json.dumps(data, ensure_ascii=False, indent=2))
+def _store_accounts_unlocked(data, accounts_path, token_path):
+    write_private(accounts_path, json.dumps(data, ensure_ascii=False, indent=2))
     current = data['accounts'].get(data.get('current') or '')
     if current:
         write_private(token_path, current['key'])
-    elif os.path.exists(token_path):
+    elif os.path.lexists(token_path):
+        if os.path.islink(token_path):
+            raise PermissionError('凭据文件是符号链接，已拒绝写入')
         os.remove(token_path)
+
+
+def load_accounts(accounts_path=None, token_path=None):
+    accounts_path = os.path.abspath(accounts_path or ACCOUNTS_PATH)
+    token_path = os.path.abspath(token_path or TOKEN_PATH)
+    directory = os.path.dirname(accounts_path)
+    if not os.path.isdir(directory) and not os.path.exists(accounts_path):
+        return {'current': None, 'accounts': {}}
+    lock = _account_lock(accounts_path)
+    try:
+        return _load_accounts_unlocked(accounts_path, token_path)
+    finally:
+        fcntl.flock(lock, fcntl.LOCK_UN)
+        os.close(lock)
+
+
+def store_accounts(data, accounts_path=None, token_path=None):
+    accounts_path = os.path.abspath(accounts_path or ACCOUNTS_PATH)
+    token_path = os.path.abspath(token_path or TOKEN_PATH)
+    lock = _account_lock(accounts_path)
+    try:
+        _store_accounts_unlocked(data, accounts_path, token_path)
+    finally:
+        fcntl.flock(lock, fcntl.LOCK_UN)
+        os.close(lock)
 
 
 def current_token(accounts_path=None, token_path=None):

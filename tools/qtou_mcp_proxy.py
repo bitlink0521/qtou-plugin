@@ -31,7 +31,7 @@ import hashlib
 import itertools
 import json
 import os
-import secrets
+import re
 import subprocess
 import sys
 import threading
@@ -63,7 +63,8 @@ AUTH_REQUIRED_MESSAGE = (
     '代签地址（轻投演示站 74，代理/宿主 POST 用，写死，禁止写成 agent.bitilinks.cn、localhost 或 127.0.0.1）：'
     + DEFAULT_AUTH_LOGIN_URL
     + '。字段：username=轻投用户名，password=轻投密码。'
-    '优先级：工具参数 > 环境变量 > elicitation；三者都没有才返回本错误。'
+    '没有安全输入时停止：普通文本框（包括 MCP elicitation 的 string 字段）不是掩码。'
+    '可执行的做法只有：在终端运行 python3 tools/qtou_mcp_proxy.py --login，或在本进程启动前写入 QTOU_LOGIN_PASSWORD。'
     '登录成功后不必清除环境变量。禁止：拷贝他人 ~/.qtou 或 qtpat_ key；打开 bot 的 box 桌面代签页；在聊天里要明文密码；'
     '不要假设仅弹出网页安全表单就能把密码交给本工具；不要用工具参数覆盖代签站点或 URL。'
     '写入后调用 agent_health 冒烟。'
@@ -227,10 +228,20 @@ def env_login_password():
 
 
 def resolve_account_add_credentials(arguments):
-    """Prefer tool arguments, then process env. Does not read elicitation or clear env."""
-    username = _string_arg(arguments, 'username').strip() or env_login_username()
-    password = _string_arg(arguments, 'password') or env_login_password()
-    return username, password
+    """Arguments win. An env password is used only for the env username, or when no username was passed."""
+    arg_user = _string_arg(arguments, 'username').strip()
+    arg_password = _string_arg(arguments, 'password')
+    env_user = env_login_username()
+    env_password = env_login_password()
+    if arg_user and arg_password:
+        return arg_user, arg_password
+    if arg_user and not arg_password:
+        if env_password and (not env_user or env_user == arg_user):
+            return arg_user, env_password
+        return arg_user, ''
+    if env_password:
+        return env_user, env_password
+    return '', ''
 
 
 def load_accounts():
@@ -241,7 +252,13 @@ def store_accounts(data):
     qtou_shared.store_accounts(data, ACCOUNTS_PATH, TOKEN_PATH)
 
 
+def current_username():
+    return load_accounts().get('current')
+
+
 def read_token():
+    if session.get('ignore_env_token') and not current_username():
+        return ''
     return qtou_shared.current_token(ACCOUNTS_PATH, TOKEN_PATH)
 
 
@@ -256,6 +273,55 @@ def save_account(username, key, key_id):
 def reset_upstream():
     session['id'] = None
     session['upstream_ready'] = False
+
+
+_SECRET_RUN = re.compile(r'[A-Za-z0-9_@.+/=-]{6,}')
+_TOKEN_RUN = re.compile(r'qtpat_[A-Za-z0-9_-]*')
+_BEARER_RUN = re.compile(r'(?i)bearer\s+\S+')
+
+
+def _known_secrets():
+    found = [env_login_password(), os.environ.get('QTOU_CONNECTOR_TOKEN', '').strip()]
+    try:
+        for info in load_accounts().get('accounts', {}).values():
+            if isinstance(info, dict):
+                found.append(info.get('key') or '')
+    except (OSError, ValueError):
+        pass
+    return [item for item in found if isinstance(item, str) and item]
+
+
+def _safe_words():
+    words = {
+        'INVALID_ARGUMENT', 'NOT_FOUND', 'FAILED_PRECONDITION', 'BACKEND_DB_ERROR', 'INTERNAL_ERROR',
+        'USER_DECLINED', 'AUTH_REQUIRED', 'AUTH_FAILED', 'ACCOUNT_CHANGED', 'UPSTREAM_ERROR', 'UPSTREAM_HTTP',
+        'pendingId', 'projectId', 'page', 'pageSize', 'HTTP',
+    }
+    tools, _ = load_tool_catalog()
+    for tool in tools or []:
+        words.add(tool.get('name') or '')
+        words.update(((tool.get('inputSchema') or {}).get('properties') or {}))
+    for tool in LOCAL_TOOLS:
+        words.add(tool['name'])
+    words.discard('')
+    return words
+
+
+def scrub_diagnostic(text, secrets=None):
+    """Keep a short diagnosis. Drop tokens and any other 6+ character secret-shaped run."""
+    if not isinstance(text, str):
+        return ''
+    for secret in secrets if secrets is not None else _known_secrets():
+        text = text.replace(secret, '***')
+    text = _TOKEN_RUN.sub('***', text)
+    text = _BEARER_RUN.sub('Bearer ***', text)
+    safe = _safe_words()
+
+    def replace(match):
+        word = match.group(0)
+        return word if word in safe else '***'
+
+    return _SECRET_RUN.sub(replace, text)[:240]
 
 
 def emit(message):
@@ -333,29 +399,27 @@ def ask_credentials(hint, use_terminal):
     return username, ask_dialog('请输入轻投密码', hidden=True)
 
 
-def _hide_secret(text, secret):
-    if isinstance(text, str) and isinstance(secret, str) and secret:
-        return text.replace(secret, '***')
-    return text
+def open_url(request, timeout):
+    return qtou_shared.open_without_redirect(request, timeout)
 
 
 def sign_key(username, password):
     body = urllib.parse.urlencode({'username': username, 'password': password, 'client': 'qtou-mcp-proxy'}).encode()
     try:
-        with urllib.request.urlopen(urllib.request.Request(LOGIN_URL, data=body, method='POST'), timeout=20) as response:
+        with open_url(urllib.request.Request(LOGIN_URL, data=body, method='POST'), 20) as response:
             data = json.load(response)
     except urllib.error.HTTPError as error:
         try:
             data = json.load(error)
         except ValueError:
-            return None, None, _hide_secret('登录失败（HTTP %s）' % error.code, password)
+            return None, None, '登录失败（HTTP %s）' % error.code
     except (urllib.error.URLError, OSError):
         return None, None, '连不上轻投服务，请检查网络'
     payload = data.get('data') or data
     key = payload.get('agentKey') or ''
     if key.startswith('qtpat_'):
         return key, payload.get('agentKeyId'), None
-    return None, None, _hide_secret(str(data.get('msg') or payload.get('message') or '用户名或密码不对'), password)
+    return None, None, scrub_diagnostic(str(data.get('msg') or payload.get('message') or '用户名或密码不对'), [password])
 
 
 def login(use_terminal=False, reason=''):
@@ -385,7 +449,7 @@ def revoke_key(key, key_id):
     request = urllib.request.Request(API_BASE + '/tokens/' + urllib.parse.quote(key_id), method='DELETE',
                                      headers={'Authorization': 'Bearer ' + key})
     try:
-        with urllib.request.urlopen(request, timeout=20) as response:
+        with open_url(request, 20) as response:
             return response.status == 200
     except (urllib.error.URLError, OSError):
         return False
@@ -398,7 +462,7 @@ def post(message, token):
         headers['Mcp-Session-Id'] = session['id']
     request = urllib.request.Request(MCP_URL, data=json.dumps(message).encode(), headers=headers, method='POST')
     try:
-        response = urllib.request.urlopen(request, timeout=600)
+        response = open_url(request, 600)
         status = response.status
     except urllib.error.HTTPError as error:
         response, status = error, error.code
@@ -458,16 +522,46 @@ def initialize_upstream(token):
     return status, replies
 
 
-def forward(message):
-    token = ensure_token()
-    if session['initialize'] and not session['upstream_ready']:
-        status, replies = initialize_upstream(token)
-        if not session['upstream_ready']:
+def scrub_replies(replies):
+    """Tool errors keep a scrubbed diagnosis. Success payloads stay intact."""
+    cleaned = []
+    for reply in replies or []:
+        result = reply.get('result') if isinstance(reply, dict) else None
+        if not (isinstance(result, dict) and result.get('isError')):
+            cleaned.append(reply)
+            continue
+        content = []
+        for item in result.get('content') or []:
+            if isinstance(item, dict) and item.get('type') == 'text':
+                content.append({'type': 'text', 'text': scrub_diagnostic(item.get('text') or '')})
+        cleaned.append({'jsonrpc': '2.0', 'id': reply.get('id'), 'result': {'content': content, 'isError': True}})
+    return cleaned
+
+
+def account_changed_reply(message):
+    return error_reply(message, -32002, '账号在确认期间已改变，本次没有写入。请重新发起。', {'code': 'ACCOUNT_CHANGED'})
+
+
+def forward(message, bound_token=None, bound_user=None):
+    """Serialize account identity, upstream session, and the business post."""
+    if bound_token is None and bound_user is None and not read_token():
+        ensure_token()
+    with login_lock:
+        token = read_token()
+        if bound_token is not None and (token != bound_token or current_username() != bound_user):
+            return [account_changed_reply(message)]
+        if bound_token is not None:
+            token = bound_token
+        if not token:
+            return [error_reply(message, -32001, AUTH_REQUIRED_MESSAGE, auth_required_data())]
+        if session['initialize'] and not session['upstream_ready']:
+            status, replies = initialize_upstream(token)
+            if not session['upstream_ready']:
+                return [upstream_failure_reply(message, status, replies)]
+        status, replies = post(message, token)
+        if status >= 400 or not replies or _jsonrpc_errors(replies):
             return [upstream_failure_reply(message, status, replies)]
-    status, replies = post(message, token)
-    if status >= 400 or not replies or _jsonrpc_errors(replies):
-        return [upstream_failure_reply(message, status, replies)]
-    return replies
+        return scrub_replies(replies)
 
 
 def keep_images_visible(replies):
@@ -511,8 +605,13 @@ def call_local_tool(name, arguments):
                                        'login': auth_required_data()}, is_error=True)
                 save_account(username, key, key_id)
             else:
-                login(reason='添加轻投账号。')
+                raise LoginCancelled()
         return tool_result(dict(account_summary(), message='已登录并切换到新账号'))
+    with login_lock:
+        return _switch_or_logout(name, arguments)
+
+
+def _switch_or_logout(name, arguments):
     data = load_accounts()
     username = (arguments.get('username') or '').strip()
     if name == 'qtou_account_switch':
@@ -527,6 +626,10 @@ def call_local_tool(name, arguments):
         username = username or data['current']
         account = data['accounts'].pop(username, None)
         if not account:
+            if not username and read_token():
+                session['ignore_env_token'] = True
+                reset_upstream()
+                return tool_result({'message': '没有保存在本机的账号。本进程已停止使用环境变量中的连接 token；请在宿主取消 QTOU_CONNECTOR_TOKEN 后重开连接。服务端密钥未吊销。'})
             return tool_result({'error': {'code': 'NOT_FOUND', 'message': '本机没有这个账号', 'tool': name}}, is_error=True)
         revoked = revoke_key(account['key'], account.get('keyId'))
         if data['current'] == username:
@@ -639,11 +742,14 @@ def handle(message):
             replies = [{'jsonrpc': '2.0', 'id': message.get('id'), 'result': {collection: []}}]
         elif method == 'tools/call' and not read_token():
             replies = [error_reply(message, -32001, AUTH_REQUIRED_MESSAGE, auth_required_data())]
-        elif (method == 'tools/call' and params.get('name') in CONFIRM_TOOLS and session['client_form']
-              and not confirmed_by_user(params['name'], params.get('arguments') or {})):
-            replies = [{'jsonrpc': '2.0', 'id': message.get('id'), 'result': tool_result(
-                {'error': {'code': 'USER_DECLINED', 'message': '用户在确认卡上没有同意，本次未写入', 'tool': params['name']}},
-                is_error=True)}]
+        elif method == 'tools/call' and params.get('name') in CONFIRM_TOOLS and session['client_form']:
+            bound_user, bound_token = current_username(), read_token()
+            if not confirmed_by_user(params['name'], params.get('arguments') or {}):
+                replies = [{'jsonrpc': '2.0', 'id': message.get('id'), 'result': tool_result(
+                    {'error': {'code': 'USER_DECLINED', 'message': '用户在确认卡上没有同意，本次未写入', 'tool': params['name']}},
+                    is_error=True)}]
+            else:
+                replies = keep_images_visible(forward(message, bound_token=bound_token, bound_user=bound_user))
         elif method == 'tools/call':
             replies = keep_images_visible(forward(message))
         else:
@@ -735,8 +841,10 @@ def serve():
 
 def main():
     if sys.argv[1:] == ['--login']:
+        if not sys.stdin.isatty():
+            sys.exit('没有可隐藏输入的终端。请在终端运行 python3 tools/qtou_mcp_proxy.py --login，或在启动代理之前设置 QTOU_LOGIN_PASSWORD。')
         try:
-            login(use_terminal=sys.stdin.isatty())
+            login(use_terminal=True)
         except LoginCancelled:
             sys.exit('已取消登录。')
         print('已登录轻投并设为当前账号（key 本身未显示）。')

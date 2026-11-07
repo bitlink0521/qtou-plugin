@@ -71,11 +71,30 @@ grok plugin install https://github.com/bitlink0521/qtou-plugin --trust
 
 Codex 与 Cursor 的插件清单写了技能目录 `./skills/`。Claude 的插件说明写的是默认读取插件根目录的 `skills/`。Grok 的清单没有单独的技能字段。这些都还没有在对应客户端里验收。
 
+## 传输
+
+当前写在程序里的默认地址是开发用的明文 HTTP：`http://113.250.189.74:18081/api/v1/agent/mcp` 和同主机的 `/api/v1/agent/auth/login`。密码和 key 会按这个地址发送。这次没有改成 HTTPS，也不能把传输说成已经安全。
+
+公开发布前应改用可核验证书的 HTTPS。启动前设置：
+
+```bash
+export QTOU_MCP_URL='https://你的正式域名/api/v1/agent/mcp'
+export QTOU_LOGIN_URL='https://你的正式域名/api/v1/agent/auth/login'
+python3 -c 'import os; assert os.environ["QTOU_MCP_URL"].startswith("https://"); assert os.environ["QTOU_LOGIN_URL"].startswith("https://")'
+```
+
+这两条都不是 `https://` 时，不要把该配置交给公开用户。
+
 ## 第一次使用
 
 1. 连上之后就可以看到 36 个工具。还没登录也可以看列表。
-2. 对 AI 说「登录轻投」。它必须用**当前这次聊天的安全表单或掩码输入**来接收用户名和密码，再调用 `qtou_account_add`。不要把密码打在对话正文里。如果它让你把密码贴进消息，拒绝。
-3. 登录后说「检查轻投连接」。这是只读检查，工具是 `agent_health`，不需要参数。看到连接正常后再做下面三件事。
+2. 登录只有两条不会把密码打进聊天的路：
+   - 在你自己的终端执行 `python3 <插件目录>/tools/qtou_mcp_proxy.py --login`。程序只在这个终端能隐藏输入时询问密码。没有这种终端就直接退出，不会改用普通输入框。
+   - 或者由客户端在**启动代理之前**把密码放进该进程的 `QTOU_LOGIN_PASSWORD`（用户名放进 `QTOU_LOGIN_USERNAME`）。代理已经在跑时，先重开这个连接，再让 AI 调用 `qtou_account_add`，调用参数里不要带密码。
+3. 做不到上面任何一条，就停止。不要把密码打进对话。客户端里的普通文本框，包括 MCP 表单里的 string 字段，都不是掩码。
+4. 登录后说「检查轻投连接」。这是只读检查，工具是 `agent_health`，不需要参数。
+
+用户名参数不能搭配另一个账号留在环境里的密码。退出账号只删除本机保存的那个账号；如果当前只用了环境变量里的连接 token，退出会让本进程停止使用它，并请你在客户端去掉 `QTOU_CONNECTOR_TOKEN` 后重开连接。
 
 账号相关可以说：现在用的哪个轻投账号、添加轻投账号、切换到某个账号、退出某个账号。
 

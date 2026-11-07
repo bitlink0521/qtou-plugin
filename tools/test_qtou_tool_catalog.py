@@ -138,7 +138,7 @@ class CatalogRuntimeTests(unittest.TestCase):
         ]
         for patch in self.path_patches:
             patch.start()
-        proxy.session.update(id=None, initialize=None, upstream_ready=False, client_form=False)
+        proxy.session.update(id=None, initialize=None, upstream_ready=False, client_form=False, ignore_env_token=False)
         FakeQtou.logins, FakeQtou.calls, FakeQtou.valid = [], [], set()
 
     def tearDown(self):
@@ -150,7 +150,7 @@ class CatalogRuntimeTests(unittest.TestCase):
         emitted = []
         def refuse(*args, **kwargs):
             raise AssertionError('tools/list must not open a network connection')
-        with mock.patch('urllib.request.urlopen', refuse), mock.patch.object(proxy, 'emit', side_effect=emitted.append):
+        with mock.patch.object(proxy, 'open_url', refuse), mock.patch.object(proxy, 'emit', side_effect=emitted.append):
             proxy.handle({'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list'})
         return emitted[0]
 
@@ -163,13 +163,13 @@ class CatalogRuntimeTests(unittest.TestCase):
             second = self.listed()
         self.assertEqual(second['result']['tools'], first['result']['tools'])
         self.assertEqual(FakeQtou.calls, [])
-        with mock.patch('urllib.request.urlopen', side_effect=OSError('offline')):
+        with mock.patch.object(proxy, 'open_url', side_effect=OSError('offline')):
             third = self.listed()
         self.assertEqual([item['name'] for item in third['result']['tools']], expected)
 
     def test_business_call_without_token_does_not_post(self):
         emitted = []
-        with mock.patch('urllib.request.urlopen', side_effect=AssertionError('business call posted')), \
+        with mock.patch.object(proxy, 'open_url', side_effect=AssertionError('business call posted')), \
                 mock.patch.object(proxy, 'emit', side_effect=emitted.append), \
                 mock.patch.object(proxy, 'ask_credentials') as ask:
             proxy.handle({'jsonrpc': '2.0', 'id': 4, 'method': 'tools/call',
@@ -263,7 +263,7 @@ class CatalogRuntimeTests(unittest.TestCase):
         for path, code in cases:
             emitted = []
             with mock.patch.dict(os.environ, {'QTOU_TOOL_CATALOG': path}), \
-                    mock.patch('urllib.request.urlopen', side_effect=AssertionError('catalog error used the network')), \
+                    mock.patch.object(proxy, 'open_url', side_effect=AssertionError('catalog error used the network')), \
                     mock.patch.object(proxy, 'emit', side_effect=emitted.append):
                 proxy.handle({'jsonrpc': '2.0', 'id': 9, 'method': 'tools/list'})
             error = emitted[0]['error']
@@ -318,7 +318,7 @@ class UpstreamFailureTests(unittest.TestCase):
             'accounts': {'u1': {'key': self.key, 'keyId': 'id-u1', 'savedAt': '2026-01-01 00:00:00'}},
         }, self.accounts, self.token_path)
         self.saved = open(self.accounts, 'rb').read()
-        proxy.session.update(id=None, initialize=None, upstream_ready=False, client_form=False)
+        proxy.session.update(id=None, initialize=None, upstream_ready=False, client_form=False, ignore_env_token=False)
         ModeQtou.hits = []
         ModeQtou.methods = []
 
@@ -391,7 +391,7 @@ class UpstreamFailureTests(unittest.TestCase):
 
         emitted = []
         started = time.monotonic()
-        with mock.patch('urllib.request.urlopen', side_effect=block), \
+        with mock.patch.object(proxy, 'open_url', side_effect=block), \
                 mock.patch.object(proxy, 'emit', side_effect=emitted.append), \
                 mock.patch.object(proxy, 'ask_credentials') as ask:
             proxy.initialize({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize',
