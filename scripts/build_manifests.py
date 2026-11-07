@@ -46,16 +46,18 @@ def build(meta):
         }}},
         '.grok-plugin/plugin.json': dict(common, logo=logo, mcpServers='./.grok-mcp.json'),
         '.mcp.json': {'mcpServers': {meta['name']: {'command': 'python3', 'args': ['${CLAUDE_PLUGIN_ROOT}/' + meta['proxy']]}}},
-        # Grok Bot marketplace reads .cursor-plugin (empiric); point it at stdio proxy.
-        # Root mcp.json stays HTTP for Cursor 直连 / 手动 HTTP. variables dropped: InstallPlugin
-        # values do not populate QTOU_CONNECTOR_TOKEN on Grok; the host should pop
-        # HostSecureLogin then call qtou_account_add with username/password (see skills/qtou-connect).
-        # Codex may still use elicitation as a fallback; host bots must not gamble on it.
-        '.cursor-plugin/plugin.json': dict(common, logo=logo, mcpServers='./.grok-mcp.json'),
+        # Cursor plugins declare skills the same way as the installed Tavily plugin: "skills": "./skills/".
+        # Grok's manifest in this generator only has mcpServers; do not add a skills key.
+        # Claude scans skills/ at the plugin root by default, so .claude-plugin has no skills key.
+        # Root mcp.json uses the same stdio shape as .codex-mcp.json (no host variable).
+        # HTTP is only examples/http-mcp.example.json and is not referenced by any plugin manifest.
+        '.cursor-plugin/plugin.json': dict(common, logo=logo, skills='./skills/', mcpServers='./.grok-mcp.json'),
         '.cursor-plugin/marketplace.json': {'name': meta['marketplace'], 'owner': meta['author'],
                                             'metadata': {'description': '轻投插件市场'}, 'plugins': [marketplace_entry]},
-        'mcp.json': {'mcpServers': {meta['name']: {'type': 'http', 'url': meta['mcpUrl'],
-                                                  'headers': {'Authorization': 'Bearer ${QTOU_CONNECTOR_TOKEN}'}}}},
+        'mcp.json': {'mcpServers': {meta['name']: {'command': 'python3', 'args': [proxy_relative], 'cwd': '.'}}},
+        'examples/http-mcp.example.json': {'mcpServers': {meta['name']: {
+            'type': 'http', 'url': meta['mcpUrl'],
+            'headers': {'Authorization': 'Bearer ${QTOU_CONNECTOR_TOKEN}'}}}},
     }
 
 

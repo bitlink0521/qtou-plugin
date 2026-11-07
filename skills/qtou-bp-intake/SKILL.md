@@ -16,15 +16,15 @@ description: >-
 2. **提取证据**：读 [FIELDS.md](FIELDS.md)，按字段表、证据格式和「值怎么写」生成 `bpEvidence`，包括 `fields`、**核心团队 `team`（BP 里有几个人就写几个人）**、历史融资 `financing`。字典字段只查对应字段的选项。
 3. **建待确认**：`agent_projects_create_pending({ projectName, companyName, text, bpEvidence })`，`companyName` 用法定全称。`text` 只写几行简短标签，如「项目名称：…」「公司名称：…」「轮次：…」「行业：…」「来源：BP 文件名」，每行的值几个词即可（来源、轮次、城市限 64 字），详细内容都放进 `bpEvidence`。记下 `pendingId`、`evidenceId`、`confirmToken`。返回 `bpEvidenceStored: false` 说明证据没存上：照 message 改好，第 5 步改为直接传完整 `evidence`。
 4. **确认入池**：
-   - `companyMatch.choiceRequired: true`（已有同名公司）：给用户两个选项「关联已有公司」「取消后改名」，用户选定后调 `agent_projects_company_choose({ pendingId, choice, companyId, confirmed: true })`。
-   - 展示摘要（项目名、公司、轮次、团队人数、缺口）后调 `agent_projects_confirm({ pendingId, confirmToken })`。Codex 等支持表单的客户端会弹确认卡让用户点「接受 / 拒绝」，不要再让用户打字；不支持表单的客户端用文字确认卡，用户明确回复「确认入池」才调。返回 `USER_DECLINED` 视为取消，不重试。
+   - 随包目录没有 `agent_projects_company_choose`。服务端若返回同名公司需要选择，把选项告诉用户后停止这一支，不要调用不存在的工具。
+   - 展示摘要（项目名、公司、轮次、团队人数、缺口）后调 `agent_projects_confirm({ pendingId })`。`confirmToken` 不是该工具的入参。Codex 等支持表单的客户端会弹确认卡让用户点「接受 / 拒绝」，不要再让用户打字；不支持表单的客户端用文字确认卡，用户明确回复「确认入池」才调。返回 `USER_DECLINED` 视为取消，不重试。
    - `askUser` 里的字段（联系人、推荐人等）列为「可选补充」，不阻塞入池；用户回答后用其原话调 `agent_projects_user_fields`（先 `confirmed: false` 预览，再 `true`）。
    - 返回「天眼查未取得有效公司」：按 [ENRICHMENT.md](ENRICHMENT.md)「天眼查查不到时的兜底建档」带 `companyFallback` 重试同一个 pendingId。
    - 用户确认入池即授权补空值：第 5–8 步直接做，不逐项问用户。
 
    以下各步都先 `confirmed: false` 预览自检（主体、值、出处、字典），通过再 `confirmed: true` 写入；自检不过的项不写，记入缺口。
-5. **补字段和团队**：`agent_projects_bp_fill({ pendingId, evidenceId, confirmed })`（第 3 步证据没存上时传 `evidence`）。看返回里每项的 `filled / preserved / needs_verification`，团队成员必须逐个写入。
-6. **上传 BP 原文件**：转成 PDF（≤20MB，超限去掉内嵌视频或压缩图片），算 SHA256，调 `agent_projects_bp_upload_url({ pendingId, fileName, sha256, sizeBytes })`，按返回的地址 PUT 文件，请求头带返回 `headers` 里的 `X-Qtou-Upload-Sig`；再调 `agent_projects_bp_attach({ pendingId, uploadId, confirmed })`，记下 `fileId`。不能用本地路径代替上传。
+5. **补字段和团队**：`agent_projects_bp_fill({ pendingId, evidence, confirmed })`。`evidence` 用第 2 步的 bpEvidence；随包目录没有 `evidenceId` 这个入参。看返回里每项的 `filled / preserved / needs_verification`，团队成员必须逐个写入。
+6. **上传 BP 原文件**：转成 PDF（≤20MB）。随包目录没有 `agent_projects_bp_upload_url`，不要申请上传地址、不要 PUT、不要使用 `X-Qtou-Upload-Sig` 或 `uploadId`。用户授权后调 `agent_projects_bp_attach({ pendingId, file: { fileName, contentBase64, sha256 }, confirmed: true })`。`fileName` 只写文件名，`contentBase64` 是 PDF 正文。不能用本地路径代替文件内容。
 7. **图片和扫描页**：读 [VISUALS.md](VISUALS.md)，逐页看图、补图里的文字、裁 Logo / 团队头像 / 证据图。
 8. **工商和档案字段**：读 [ENRICHMENT.md](ENRICHMENT.md)，用 `workflow.py` 联网检索、核实、补写工商与公司档案空字段。
 9. **回读**：`agent_projects_bp_get({ pendingId })` 和 `agent_projects_profile_get({ pendingId })`。

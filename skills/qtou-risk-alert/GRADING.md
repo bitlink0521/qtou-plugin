@@ -1,6 +1,6 @@
 # 定级规则（主流程第 4 步）
 
-阈值以 `agent_risk_threshold_get` 返回为准（`*_medium` / `*_high` 是降幅百分点，`debt_ratio_warn` 是资产负债率，`report_due_days` / `report_due_days_q4` 是季末后天数）。下文括号里的数字是默认值，租户改过就用租户值。每条预警写明命中哪一条。
+阈值以 `risk_config_get` 返回为准（随包目录没有 `agent_risk_threshold_get`）。`*_medium` / `*_high` 是降幅百分点，`debt_ratio_warn` 是资产负债率，`report_due_days` / `report_due_days_q4` 是季末后天数。下文括号里的数字是默认值，租户改过就用租户值。每条预警写明命中哪一条。
 
 ## 高 high（网页显示「重大」）
 

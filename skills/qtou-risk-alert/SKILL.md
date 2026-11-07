@@ -11,7 +11,7 @@ description: >-
 ## 执行清单
 
 1. **取名单**：`agent_portfolio_list({ afterInvestOnly: true, pageSize: 50 })`（可加 `q` 过滤）。`hasMore: true` 就带 `page` 取下一页直到取完，企业数以 `total` 为准。记下每家的 projectId、项目名、公司全称、法人、成立日期、行业、投资日期。项目名相同但公司全称或法人不同的分开处理。
-2. **取阈值**：`agent_risk_threshold_get()`，后面定级用它返回的值。
+2. **取阈值**：`risk_config_get()`。随包目录没有 `agent_risk_threshold_get`。后面定级用 `risk_config_get` 返回的值。
 3. **季度财务**：每家调 `agent_portfolio_quarterly({ projectId })`（可带 `from` / `to`，格式 YYYYQn）。`finance` 每季两行：`type=current` 本期、`type=samePeriod` 去年同期。`reports` 是季报报送记录。返回「项目不存在或不属于当前租户」如实报，不换路径。
 4. **舆情和公告**：每家都查，用公司全称加法人或成立日期消歧；主体对不上的结果不用，拿不准标「待核实」不定级。
    - 舆情：近 90 天，财经和主流媒体；同一事件 ≥2 家独立媒体才算确认。

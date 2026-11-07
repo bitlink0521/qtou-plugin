@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """stdio MCP bridge to the qtou server with built-in login and multiple accounts.
 
-The client (e.g. Codex) launches this as a stdio MCP server. Every JSON-RPC message is forwarded to
-QTOU_MCP_URL with the current account's connector key. When there is no account or the key is rejected,
-the user is asked for the qtou username/password, a key is signed and saved, and the request is retried,
-so the first use logs in and later uses just work.
+The client (e.g. Codex) launches this as a stdio MCP server. tools/list is answered from the shipped
+catalog in qtou_tool_catalog.json plus the four local account tools, and does not contact the server.
+A business tools/call still needs a saved key and is posted to QTOU_MCP_URL. With no saved key the
+call returns AUTH_REQUIRED and does not post. An HTTP error or a JSON-RPC error from the server is
+returned as that error: it is not rewritten into a successful tool list and it does not start a login.
 
 Host bots should collect credentials with a chat secret-request (mask box) and/or
 RequestUserForm, then call qtou_account_add. Args win over env QTOU_LOGIN_PASSWORD
@@ -24,9 +25,11 @@ qtou_account_list / qtou_account_add / qtou_account_switch / qtou_account_logout
 `--login` adds an account by hand (terminal prompts when available, dialogs otherwise).
 """
 import getpass
+import hashlib
 import itertools
 import json
 import os
+import secrets
 import subprocess
 import sys
 import threading
@@ -44,7 +47,6 @@ DEFAULT_AUTH_LOGIN_URL = qtou_shared.DEFAULT_AUTH_LOGIN_URL
 LOGIN_URL = qtou_shared.auth_login_url()
 TOKEN_PATH = qtou_shared.TOKEN_PATH
 ACCOUNTS_PATH = qtou_shared.ACCOUNTS_PATH
-AUTH_ERROR_CODE = 10007
 MAX_LOGIN_ATTEMPTS = 3
 FORM_TIMEOUT_SECONDS = 600
 ENV_LOGIN_USERNAME = 'QTOU_LOGIN_USERNAME'
@@ -95,6 +97,79 @@ LOCAL_TOOLS = [
 ]
 LOCAL_TOOL_NAMES = {tool['name'] for tool in LOCAL_TOOLS}
 
+CATALOG_SOURCE_COMMIT = '877e4ad9eb8f8435c30b55b12949268d0cb24e30'
+CATALOG_SOURCE_FILES = (
+    ('qtou-api/src/main/java/cn/qtou/api/modules/agent/service/AgentMcpService.java',
+     '7656997a66f4f8bcc541e45325aed0527fde12869cf3220fc4e7c0268fee81ea'),
+    ('qtou-api/src/main/java/cn/qtou/api/modules/agent/service/AgentBpService.java',
+     'c32a6b73667e5e3d1ffc243f82a19b4aa94aedaaac3e0e430d00721d73c0dedd'),
+    ('qtou-api/src/main/java/cn/qtou/api/modules/agent/service/AgentBpMediaService.java',
+     'acf855cc82fcd8aedb7ceb8c1b22c426b831a2df40e5db8856de4122403339bc'),
+    ('qtou-api/src/main/java/cn/qtou/api/modules/agent/service/AgentUserFields.java',
+     '9ab484d1afabf099fbbdae5516316059e69e8418c9969b629a09314b9356e54d'),
+    ('qtou-api/src/main/java/cn/qtou/api/modules/agent/service/AgentEntryFields.java',
+     '74d71b99f3c53901b3448759374f2c7dd5e8d942618b6bfabf4d3a178120b123'),
+    ('qtou-api/src/main/java/cn/qtou/api/modules/agent/service/AgentRiskMcpPostProcessor.java',
+     '8c7410dd557d4fc003fcb08a0b3851a6c7ae6398b0cc2f290215bef6d7cfeaa3'),
+    ('qtou-api/src/main/java/cn/qtou/api/modules/agent/service/AgentRiskMcpTools.java',
+     'e944a90be987e4542ca19662de91a68d885b988bb7fbadd842af64a41b8dbc7e'),
+)
+CATALOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'qtou_tool_catalog.json')
+CATALOG_ERRORS = {
+    'CATALOG_MISSING': '轻投工具目录缺失',
+    'CATALOG_INVALID': '轻投工具目录无效',
+    'CATALOG_VERSION_MISMATCH': '轻投工具目录版本不符',
+}
+
+
+def catalog_tools_digest(tools):
+    raw = json.dumps(tools, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
+    return hashlib.sha256(raw).hexdigest()
+
+
+def catalog_file_path():
+    override = os.environ.get('QTOU_TOOL_CATALOG', '').strip()
+    return override or CATALOG_PATH
+
+
+def load_tool_catalog(path=None):
+    """Shipped name/description/inputSchema. Never reads the network."""
+    path = path or catalog_file_path()
+    try:
+        with open(path, 'r', encoding='utf-8') as handle:
+            raw = handle.read()
+    except OSError:
+        return None, 'CATALOG_MISSING'
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        return None, 'CATALOG_INVALID'
+    if not isinstance(data, dict):
+        return None, 'CATALOG_INVALID'
+    if data.get('sourceCommit') != CATALOG_SOURCE_COMMIT:
+        return None, 'CATALOG_VERSION_MISMATCH'
+    files = data.get('sourceFiles')
+    if not isinstance(files, list) or len(files) != len(CATALOG_SOURCE_FILES):
+        return None, 'CATALOG_VERSION_MISMATCH'
+    for got, expect in zip(files, CATALOG_SOURCE_FILES):
+        if not isinstance(got, dict) or got.get('path') != expect[0] or got.get('sha256') != expect[1]:
+            return None, 'CATALOG_VERSION_MISMATCH'
+    tools = data.get('tools')
+    if not isinstance(tools, list) or not tools:
+        return None, 'CATALOG_INVALID'
+    cleaned = []
+    for item in tools:
+        if not isinstance(item, dict) or list(item.keys()) != ['name', 'description', 'inputSchema']:
+            return None, 'CATALOG_INVALID'
+        name, description, input_schema = item['name'], item['description'], item['inputSchema']
+        if not isinstance(name, str) or not name or not isinstance(description, str) or not isinstance(input_schema, dict):
+            return None, 'CATALOG_INVALID'
+        cleaned.append({'name': name, 'description': description, 'inputSchema': input_schema})
+    digest = data.get('schemaSha256')
+    if not isinstance(digest, str) or digest != catalog_tools_digest(cleaned):
+        return None, 'CATALOG_INVALID'
+    return cleaned, None
+
 
 class LoginCancelled(Exception):
     pass
@@ -103,6 +178,7 @@ class LoginCancelled(Exception):
 def log(message):
     sys.stderr.write('[qtou-mcp] %s\n' % message)
     sys.stderr.flush()
+
 
 
 def auth_required_data():
@@ -181,16 +257,20 @@ def reset_upstream():
 
 
 def emit(message):
-    """Reply using the same stdio framing the client used on its last request."""
-    body = json.dumps(message, ensure_ascii=False)
+    """Reply using the same stdio framing the client used on its last request.
+
+    Content-Length counts UTF-8 bytes. The body is written to the binary buffer so a
+    non-UTF-8 stdout encoding cannot shorten a Chinese frame.
+    """
+    body = json.dumps(message, ensure_ascii=False).encode('utf-8')
     with write_lock:
+        out = sys.stdout.buffer
         if session.get('stdio_framed'):
-            raw = body.encode('utf-8')
-            sys.stdout.write('Content-Length: %d\r\n\r\n' % len(raw))
-            sys.stdout.write(body)
+            out.write(('Content-Length: %d\r\n\r\n' % len(body)).encode('ascii'))
+            out.write(body)
         else:
-            sys.stdout.write(body + '\n')
-        sys.stdout.flush()
+            out.write(body + b'\n')
+        out.flush()
 
 
 def request_client(method, params):
@@ -320,32 +400,80 @@ def post(message, token):
             session['id'] = session_id
         content_type = response.headers.get('Content-Type', '')
         raw = response.read().decode('utf-8', 'replace')
-    return status, parse_mcp_body(raw, content_type)
+    try:
+        replies = parse_mcp_body(raw, content_type)
+    except ValueError:
+        replies = []
+    return status, replies
 
 
-def is_auth_failure(status, replies):
-    if status == 401:
-        return True
-    return any(isinstance(reply, dict) and (reply.get('error') or {}).get('code') == AUTH_ERROR_CODE for reply in replies)
+def _jsonrpc_errors(replies):
+    found = []
+    for reply in replies or []:
+        if isinstance(reply, dict) and isinstance(reply.get('error'), dict) and reply.get('error'):
+            found.append(reply['error'])
+    return found
+
+
+def _secrets(message, token):
+    found = [token, env_login_password()]
+    params = message.get('params') if isinstance(message, dict) else None
+    arguments = params.get('arguments') if isinstance(params, dict) else None
+    if isinstance(arguments, dict):
+        for name in ('password', 'token', 'authorization'):
+            found.append(arguments.get(name))
+    return found
+
+
+def _redact(value, secrets):
+    secrets = sorted({item for item in secrets if isinstance(item, str) and len(item) >= 8}, key=len, reverse=True)
+    if isinstance(value, str):
+        for secret in secrets:
+            value = value.replace(secret, '***')
+        return value
+    if isinstance(value, list):
+        return [_redact(item, secrets) for item in value]
+    if isinstance(value, dict):
+        return {key: _redact(item, secrets) for key, item in value.items()}
+    return value
+
+
+def upstream_failure_reply(message, status, replies, secrets):
+    """Keep a JSON-RPC error. An HTTP failure is never a successful result."""
+    errors = _jsonrpc_errors(replies)
+    if errors:
+        return {'jsonrpc': '2.0', 'id': message.get('id'), 'error': _redact(errors[0], secrets)}
+    if isinstance(status, int) and status >= 400:
+        text = '轻投服务返回 HTTP %s' % status
+    else:
+        text = '轻投服务没有返回可解析的结果'
+    data = {'code': 'UPSTREAM_HTTP'}
+    if isinstance(status, int) and status:
+        data['httpStatus'] = status
+    return error_reply(message, -32002, text, data)
 
 
 def initialize_upstream(token):
     session['id'] = None
-    post(session['initialize'], token)
+    status, replies = post(session['initialize'], token)
+    if status >= 400 or not replies or _jsonrpc_errors(replies):
+        session['upstream_ready'] = False
+        return status, replies
     post({'jsonrpc': '2.0', 'method': 'notifications/initialized'}, token)
     session['upstream_ready'] = True
+    return status, replies
 
 
 def forward(message):
     token = ensure_token()
+    secrets = _secrets(message, token)
     if session['initialize'] and not session['upstream_ready']:
-        initialize_upstream(token)
+        status, replies = initialize_upstream(token)
+        if not session['upstream_ready']:
+            return [upstream_failure_reply(message, status, replies, secrets)]
     status, replies = post(message, token)
-    if is_auth_failure(status, replies):
-        token = ensure_token(rejected=token)
-        if session['initialize']:
-            initialize_upstream(token)
-        status, replies = post(message, token)
+    if status >= 400 or not replies or _jsonrpc_errors(replies):
+        return [upstream_failure_reply(message, status, replies, secrets)]
     return replies
 
 
@@ -471,14 +599,6 @@ def confirmed_by_user(name, arguments):
     return ((reply or {}).get('result') or {}).get('action') == 'accept'
 
 
-def with_local_tools(replies):
-    for reply in replies:
-        tools = (reply.get('result') or {}).get('tools') if isinstance(reply, dict) else None
-        if isinstance(tools, list):
-            tools.extend(LOCAL_TOOLS)
-    return replies
-
-
 def local_initialize(message):
     params = message.get('params') or {}
     return {'jsonrpc': '2.0', 'id': message.get('id'), 'result': {
@@ -494,8 +614,11 @@ def initialize(message):
     session['client_form'] = 'elicitation' in ((message.get('params') or {}).get('capabilities') or {})
     token = read_token()
     if token:
-        status, replies = post(message, token)
-        if not is_auth_failure(status, replies):
+        try:
+            status, replies = post(message, token)
+        except (urllib.error.URLError, OSError, ValueError):
+            status, replies = None, []
+        if isinstance(status, int) and status < 400 and replies and not _jsonrpc_errors(replies):
             session['upstream_ready'] = True
             for reply in replies:
                 emit(reply)
@@ -510,6 +633,13 @@ def error_reply(message, code, text, data=None):
     return {'jsonrpc': '2.0', 'id': message.get('id'), 'error': error}
 
 
+def tools_list_reply(message):
+    tools, code = load_tool_catalog()
+    if code:
+        return error_reply(message, -32002, CATALOG_ERRORS[code], {'code': code})
+    return {'jsonrpc': '2.0', 'id': message.get('id'), 'result': {'tools': list(tools) + list(LOCAL_TOOLS)}}
+
+
 def handle(message):
     method = message.get('method')
     params = message.get('params') or {}
@@ -520,15 +650,12 @@ def handle(message):
             replies = [{'jsonrpc': '2.0', 'id': message.get('id'),
                         'result': call_local_tool(params['name'], params.get('arguments') or {})}]
         elif method == 'tools/list':
-            # Discovery must not block on login: return local account tools only until a key exists.
-            if not read_token():
-                replies = [{'jsonrpc': '2.0', 'id': message.get('id'),
-                            'result': {'tools': list(LOCAL_TOOLS)}}]
-            else:
-                replies = with_local_tools(forward(message))
+            replies = [tools_list_reply(message)]
         elif method in ('resources/list', 'prompts/list') and not read_token():
             collection = 'resources' if method == 'resources/list' else 'prompts'
             replies = [{'jsonrpc': '2.0', 'id': message.get('id'), 'result': {collection: []}}]
+        elif method == 'tools/call' and not read_token():
+            replies = [error_reply(message, -32001, AUTH_REQUIRED_MESSAGE, auth_required_data())]
         elif (method == 'tools/call' and params.get('name') in CONFIRM_TOOLS and session['client_form']
               and not confirmed_by_user(params['name'], params.get('arguments') or {})):
             replies = [{'jsonrpc': '2.0', 'id': message.get('id'), 'result': tool_result(
@@ -563,35 +690,48 @@ def route(message):
 
 
 def read_stdio_message():
-    """Read one JSON-RPC message from stdin: Content-Length framed or NDJSON."""
+    """Read one JSON-RPC message from stdin: Content-Length framed or NDJSON.
+
+    Content-Length is a byte count. Read that many bytes from the binary buffer so a
+    multibyte UTF-8 body cannot consume the next frame. NDJSON stays one UTF-8 line.
+    """
+    stream = sys.stdin.buffer
     while True:
-        header = sys.stdin.readline()
-        if header == '':
+        header = stream.readline()
+        if header == b'':
             return None
-        if header in ('\n', '\r\n'):
+        if header in (b'\n', b'\r\n'):
             continue
-        if header.lower().startswith('content-length:'):
+        if header.lower().startswith(b'content-length:'):
             session['stdio_framed'] = True
             try:
-                length = int(header.split(':', 1)[1].strip())
+                length = int(header.split(b':', 1)[1].strip())
             except ValueError:
                 log('bad Content-Length header')
                 continue
+            if length < 0:
+                log('bad Content-Length header')
+                continue
             while True:
-                line = sys.stdin.readline()
-                if line in ('', '\n', '\r\n'):
+                line = stream.readline()
+                if line in (b'', b'\n', b'\r\n'):
                     break
-            raw = sys.stdin.read(length)
-            if not raw:
+            raw = stream.read(length) if length else b''
+            if len(raw) != length:
+                log('ignored a short framed body')
                 return None
             try:
-                message = json.loads(raw)
+                message = json.loads(raw.decode('utf-8'))
             except ValueError:
                 log('ignored a non-JSON framed body')
                 continue
             return message if isinstance(message, dict) else None
         session['stdio_framed'] = False
-        line = header.strip()
+        try:
+            line = header.decode('utf-8').strip()
+        except ValueError:
+            log('ignored a non-JSON line')
+            continue
         if not line:
             continue
         try:

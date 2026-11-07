@@ -128,12 +128,18 @@ class ProxyTests(unittest.TestCase):
             proxy.forward({'jsonrpc': '2.0', 'id': 1, 'method': 'ping'})
         ask.assert_not_called()
 
-    def test_rejected_key_prompts_again_and_retries(self):
+    def test_rejected_key_is_an_error_and_does_not_login_again(self):
         self.login_as('u1')
         FakeQtou.valid.clear()
-        with mock.patch.object(proxy, 'ask_credentials', return_value=('u1', 'right')):
+        before = proxy.read_token()
+        with mock.patch.object(proxy, 'ask_credentials') as ask:
             replies = proxy.forward({'jsonrpc': '2.0', 'id': 7, 'method': 'ping'})
+        ask.assert_not_called()
         self.assertEqual(replies[0]['id'], 7)
+        self.assertEqual(replies[0]['error']['code'], 10007)
+        self.assertNotIn('result', replies[0])
+        self.assertEqual(proxy.read_token(), before)
+        self.assertEqual(FakeQtou.logins, ['u1'])
 
     def test_wrong_password_retries_with_hint(self):
         answers = iter([('u1', 'wrong'), ('u1', 'right')])
@@ -345,13 +351,20 @@ class ProxyTests(unittest.TestCase):
                 proxy.route({'jsonrpc': '2.0', 'id': message['id'],
                              'result': {'action': 'accept', 'content': {'username': 'u1', 'password': 'right'}}})
 
-        with mock.patch.object(proxy, 'emit', side_effect=client):
+        with mock.patch.object(proxy, 'emit', side_effect=client), \
+                mock.patch.object(proxy, 'ask_credentials') as ask:
             proxy.handle({'jsonrpc': '2.0', 'id': 5, 'method': 'tools/call',
                           'params': {'name': 'agent_health', 'arguments': {}}})
-        self.assertEqual(sent[0]['method'], 'elicitation/create')
-        self.assertEqual(set(sent[0]['params']['requestedSchema']['required']), {'username', 'password'})
-        self.assertEqual(sent[1]['id'], 5)
-        self.assertNotIn('right', json.dumps(sent[1]))
+        ask.assert_not_called()
+        self.assertEqual(FakeQtou.logins, [])
+        self.assertEqual(FakeQtou.calls, [])
+        self.assertEqual(sent[0]['id'], 5)
+        error = sent[0]['error']
+        self.assertEqual(error['code'], -32001)
+        self.assertEqual(error['data']['code'], 'AUTH_REQUIRED')
+        self.assertEqual(error['data']['action'], 'HostSecureLogin')
+        self.assertEqual(error['data']['secretRequest'], 'QTOU_LOGIN_PASSWORD')
+        self.assertNotIn('elicitation/create', json.dumps(sent))
 
     def test_tools_list_includes_account_tools(self):
         self.login_as('u1')
@@ -360,7 +373,9 @@ class ProxyTests(unittest.TestCase):
             proxy.handle({'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list'})
         names = [tool['name'] for tool in emitted[0]['result']['tools']]
         self.assertIn('agent_health', names)
+        self.assertIn('strictAfterInvest', emitted[0]['result']['tools'][names.index('agent_portfolio_list')]['inputSchema']['properties'])
         self.assertTrue(proxy.LOCAL_TOOL_NAMES <= set(names))
+        self.assertFalse(any(call.get('method') == 'tools/list' for call in FakeQtou.calls))
 
     def test_add_switch_and_list_accounts(self):
         self.login_as('u1')
@@ -495,6 +510,7 @@ class UnauthenticatedStdioDiscoveryTests(unittest.TestCase):
             'PATH': os.environ.get('PATH', '/usr/bin:/bin'),
             'PYTHONUNBUFFERED': '1',
             'LC_ALL': os.environ.get('LC_ALL', 'C'),
+            'QTOU_MCP_URL': 'http://127.0.0.1:9/api/v1/agent/mcp',
         }
         self.assertNotIn('QTOU_LOGIN_PASSWORD', env)
         self.assertNotIn('QTOU_LOGIN_USERNAME', env)
@@ -542,8 +558,11 @@ class UnauthenticatedStdioDiscoveryTests(unittest.TestCase):
             self.assertNotEqual((listed.get('error') or {}).get('code'), -32001)
             tools = listed['result']['tools']
             names = [tool['name'] for tool in tools]
-            self.assertEqual(set(names), self.LOCAL_NAMES)
-            self.assertEqual(len(tools), 4)
+            catalog = json.load(open(os.path.join(os.path.dirname(proxy_path), 'qtou_tool_catalog.json'), encoding='utf-8'))
+            self.assertEqual(names, [tool['name'] for tool in catalog['tools']] + [
+                'qtou_account_list', 'qtou_account_add', 'qtou_account_switch', 'qtou_account_logout'])
+            self.assertTrue(all(isinstance(tool.get('description'), str) and isinstance(tool.get('inputSchema'), dict) for tool in tools))
+            self.assertIn('strictAfterInvest', tools[names.index('agent_portfolio_list')]['inputSchema']['properties'])
         finally:
             for stream in (proc.stdin, proc.stdout, proc.stderr):
                 if stream:
@@ -568,6 +587,7 @@ class UnauthenticatedStdioDiscoveryTests(unittest.TestCase):
             'PYTHONUNBUFFERED': '1',
             'PYTHONIOENCODING': 'utf-8',
             'LC_ALL': os.environ.get('LC_ALL', 'C.UTF-8'),
+            'QTOU_MCP_URL': 'http://127.0.0.1:9/api/v1/agent/mcp',
         }
         self.assertNotIn('QTOU_LOGIN_PASSWORD', env)
         self.assertNotIn('QTOU_LOGIN_USERNAME', env)
@@ -641,8 +661,10 @@ class UnauthenticatedStdioDiscoveryTests(unittest.TestCase):
             self.assertNotEqual((listed.get('error') or {}).get('code'), -32001)
             tools = listed['result']['tools']
             names = [tool['name'] for tool in tools]
-            self.assertEqual(set(names), self.LOCAL_NAMES)
-            self.assertEqual(len(tools), 4)
+            catalog = json.load(open(os.path.join(os.path.dirname(proxy_path), 'qtou_tool_catalog.json'), encoding='utf-8'))
+            self.assertEqual(names, [tool['name'] for tool in catalog['tools']] + [
+                'qtou_account_list', 'qtou_account_add', 'qtou_account_switch', 'qtou_account_logout'])
+            self.assertTrue(all(isinstance(tool.get('description'), str) and isinstance(tool.get('inputSchema'), dict) for tool in tools))
         finally:
             for stream in (proc.stdin, proc.stdout, proc.stderr):
                 if stream:

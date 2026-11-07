@@ -1,0 +1,42 @@
+{
+  "repository": "https://github.com/bitlink0521/qtou",
+  "commit": "877e4ad9eb8f8435c30b55b12949268d0cb24e30",
+  "retrieval": "cursor-github.get_file_contents raw, pinned ref",
+  "files": [
+    {
+      "file": "AgentMcpService.java",
+      "source_path": "qtou-api/src/main/java/cn/qtou/api/modules/agent/service/AgentMcpService.java",
+      "sha256": "7656997a66f4f8bcc541e45325aed0527fde12869cf3220fc4e7c0268fee81ea"
+    },
+    {
+      "file": "AgentBpService.java",
+      "source_path": "qtou-api/src/main/java/cn/qtou/api/modules/agent/service/AgentBpService.java",
+      "sha256": "c32a6b73667e5e3d1ffc243f82a19b4aa94aedaaac3e0e430d00721d73c0dedd"
+    },
+    {
+      "file": "AgentBpMediaService.java",
+      "source_path": "qtou-api/src/main/java/cn/qtou/api/modules/agent/service/AgentBpMediaService.java",
+      "sha256": "acf855cc82fcd8aedb7ceb8c1b22c426b831a2df40e5db8856de4122403339bc"
+    },
+    {
+      "file": "AgentUserFields.java",
+      "source_path": "qtou-api/src/main/java/cn/qtou/api/modules/agent/service/AgentUserFields.java",
+      "sha256": "9ab484d1afabf099fbbdae5516316059e69e8418c9969b629a09314b9356e54d"
+    },
+    {
+      "file": "AgentEntryFields.java",
+      "source_path": "qtou-api/src/main/java/cn/qtou/api/modules/agent/service/AgentEntryFields.java",
+      "sha256": "74d71b99f3c53901b3448759374f2c7dd5e8d942618b6bfabf4d3a178120b123"
+    },
+    {
+      "file": "AgentRiskMcpPostProcessor.java",
+      "source_path": "qtou-api/src/main/java/cn/qtou/api/modules/agent/service/AgentRiskMcpPostProcessor.java",
+      "sha256": "8c7410dd557d4fc003fcb08a0b3851a6c7ae6398b0cc2f290215bef6d7cfeaa3"
+    },
+    {
+      "file": "AgentRiskMcpTools.java",
+      "source_path": "qtou-api/src/main/java/cn/qtou/api/modules/agent/service/AgentRiskMcpTools.java",
+      "sha256": "e944a90be987e4542ca19662de91a68d885b988bb7fbadd842af64a41b8dbc7e"
+    }
+  ]
+}

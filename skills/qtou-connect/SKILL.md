@@ -8,7 +8,7 @@ description: >-
 
 ## 连接
 
-**默认登录（宿主 bot，如 Grok Bot / 轻投专家）**：未登录 / 401 / 第一次安装，**直接由宿主发起安全登录**采集轻投用户名与密码。不要先调空的 `qtou_account_add` 去赌 MCP elicitation。elicitation 若被取消、报 `-32001`，或用户说「没看到 / 看不到表单」，立刻改为宿主安全登录，不要再试 elicitation。插件自己弹不出宿主的安全采集控件；未登录时工具可能返回 JSON-RPC `-32001`，`error.data` 为 `AUTH_REQUIRED`（`action=HostSecureLogin`，含代签地址、字段，以及 `secretRequest=QTOU_LOGIN_PASSWORD`），宿主应按此发起安全登录。
+**默认登录（宿主 bot）**：没有已保存的 key，或业务调用返回 `-32001` / `AUTH_REQUIRED` 时，由宿主采集轻投用户名与密码，再调用 `qtou_account_add`。未登录时不要向业务接口发请求。已经登录后，服务端 HTTP 500、401、403 或 JSON-RPC error 是失败：原样告诉用户，不要包装成成功，也不要因此自动登录。插件自己弹不出宿主的安全采集控件。`error.data` 为 `AUTH_REQUIRED` 时才表示需要登录（`action=HostSecureLogin`，`secretRequest=QTOU_LOGIN_PASSWORD`）。
 
 注意：仅弹出网页类安全表单（例如只能把密文交给浏览器填充的 RequestUserForm）**不等于**已经把密码交给了本插件。RequestUserForm 可以和下面的 secret-request **并存**，但不能代替交密通路。密码不得进聊天、不得打印。若使用 RequestUserForm，`site` 必须是域名 `qtou.cn`（禁止 IP、`localhost`、`127.0.0.1`、`agent.bitilinks.cn`）；代签 POST 地址（演示站 74）**不是**表单 site，二者不要混用，也不允许用工具参数覆盖站点和 URL。
 
@@ -20,7 +20,7 @@ description: >-
 4. 代理把账密 POST 到写死的代签 URL `http://113.250.189.74:18081/api/v1/agent/auth/login`（站点和 URL 不允许覆盖），只把返回的 key 写入本机 `~/.qtou/`，不写密码。登录成功后**不清除**环境变量。密码不进日志、不进报错、不进返回值。若连接器是 HTTP，也可由宿主把账密 POST 到代签地址，将返回的 `agentKey` 写入插件变量 `QTOU_CONNECTOR_TOKEN`（key 永不进聊天）。然后 `agent_health` 冒烟。
 5. Codex / WorkBuddy / Grok 命令行补充路径：插件的 `qtou` 连接由 `tools/qtou_mcp_proxy.py` 启动。没有可用账号、没有环境变量、也没有传入参数时，它仍可请客户端弹出 MCP 表单（不支持表单的客户端改用 macOS 对话框），签发后保存在本机 `~/.qtou/`，之后自动复用。表单内容只回给启动器，不进聊天。这不是宿主 bot 的默认路径。若返回 `AUTH_REQUIRED` / `-32001`，改由宿主发 secret-request，不要循环空参 `qtou_account_add`。
 
-代签登录 URL（演示站 74，写死，供代理/宿主 POST）：`http://113.250.189.74:18081/api/v1/agent/auth/login`。禁止写成 `agent.bitilinks.cn`（工场）或 `localhost` / `127.0.0.1`，也不允许用 `qtou_account_add` 的参数覆盖。
+代签登录 URL（演示站 74，写死，供代理/宿主 POST）：`http://113.250.189.74:18081/api/v1/agent/auth/login`。禁止写成 `agent.bitilinks.cn` 或 `localhost` / `127.0.0.1`，也不允许用 `qtou_account_add` 的参数覆盖。
 
 ## 多账号（插件启动器提供的本地工具）
 
@@ -36,7 +36,7 @@ description: >-
 | 项 | 值 |
 | --- | --- |
 | MCP URL | `http://113.250.189.74:18081/api/v1/agent/mcp`（可用环境变量 `QTOU_MCP_URL` 覆盖；默认即此地址。禁止写成 `agent.bitilinks.cn` 或 `localhost` / `127.0.0.1`） |
-| 代签登录 URL（演示 74，写死） | `http://113.250.189.74:18081/api/v1/agent/auth/login`（可用 `QTOU_LOGIN_URL` 覆盖代理自己的 POST 目标；禁止写成工场或 localhost） |
+| 代签登录 URL（演示 74，写死） | `http://113.250.189.74:18081/api/v1/agent/auth/login`（可用 `QTOU_LOGIN_URL` 覆盖代理自己的 POST 目标；禁止写成 `agent.bitilinks.cn` 或 `localhost` / `127.0.0.1`） |
 | 传输 | Streamable HTTP |
 | 鉴权 | `Authorization: Bearer <agent_key>` |
 | 连接器名 | `qtou`（Grok 上手工添加的可能叫 `轻投`，二者等价） |
@@ -46,16 +46,18 @@ description: >-
 
 ## 只走 MCP 工具（强制）
 
-业务操作只能调已连接的 qtou 工具：不自己读取 key，不用 curl / 脚本 / fetch 调 `/api/v1/agent/**`，不直连数据库，不读服务器本地文件。连不上或缺工具时如实报错并停止；客户端缓存了旧工具列表时先重连再查。唯一例外是 `agent_projects_bp_upload_url` 返回的一次性上传地址（见 `qtou-bp-intake`）。
+业务操作只能调 `tools/list` 列出的 qtou 工具：不自己读取 key，不用 curl / 脚本 / fetch 调 `/api/v1/agent/**`，不直连数据库，不读服务器本地文件。连不上或缺工具时如实报错并停止；客户端缓存了旧工具列表时先重连再查。stdio 代理的 `tools/list` 读取随包目录，不访问网络；没有可用 key 时业务调用返回 `-32001` / `AUTH_REQUIRED`，不向业务接口发请求。
 
 ## 工具
+
+名称和入参以 `tools/list` 的随包目录为准（源提交 `877e4ad9eb8f8435c30b55b12949268d0cb24e30`）。
 
 | 场景 | 工具 |
 |---|---|
 | 通用 | `agent_health` · `agent_dicts` |
-| BP 入池 | `agent_bp_parse` · `agent_projects_create_pending` · `agent_projects_get` · `agent_projects_company_choose` · `agent_projects_confirm` · `agent_projects_reject` · `agent_projects_user_fields` · `agent_projects_bp_schema` · `agent_projects_bp_get` · `agent_projects_bp_source` · `agent_projects_bp_fill` · `agent_projects_bp_upload_url` · `agent_projects_bp_attach` · `agent_projects_bp_pages` · `agent_projects_bp_assets` · `agent_projects_profile_get` · `agent_projects_profile_fill` |
+| BP 入池 | `agent_bp_parse` · `agent_projects_create_pending` · `agent_projects_get` · `agent_projects_confirm` · `agent_projects_reject` · `agent_projects_user_fields` · `agent_projects_bp_schema` · `agent_projects_bp_get` · `agent_projects_bp_source` · `agent_projects_bp_fill` · `agent_projects_bp_attach` · `agent_projects_bp_pages` · `agent_projects_bp_assets` · `agent_projects_profile_get` · `agent_projects_profile_fill` |
 | 尽调报告 | `agent_documents_search` · `agent_documents_content` · `agent_documents_pages` |
-| 投后预警 | `agent_portfolio_list` · `agent_portfolio_quarterly` · `agent_risk_threshold_get` · `agent_risk_alerts_list` · `agent_risk_alerts_create` |
+| 投后预警 | `agent_portfolio_list` · `agent_portfolio_quarterly` · `agent_risk_alerts_list` · `agent_risk_alerts_create` · `create_risk_draft` · `list_risk_drafts` · `dismiss_risk_draft` · `risk_drafts_summary` · `risk_run_record` · `risk_tyc_news` · `risk_config_get` · `risk_config_update` |
 
 写操作都要用户确认：入池要过确认卡（见 `qtou-bp-intake`），预警逐条确认（见 `qtou-risk-alert`）。用户确认入池后的补空值写入按 `qtou-bp-intake` 自动执行，不再逐项确认。
 
@@ -67,4 +69,4 @@ description: >-
 
 ## 不做
 
-不手抄 PAT；不在聊天里要账号密码或 key；不拷贝他人 `~/.qtou`；不打开 bot 的 box 桌面代签页；不把代签/MCP 地址写成 `agent.bitilinks.cn`（工场）或 `localhost` / `127.0.0.1`；不把 RequestUserForm 的 site 写成 IP 或工场/localhost（要用 `qtou.cn`）；不假设弹网页安全表单就能把密码交给本工具；不沿用其他 bot 的 secret-request；不直连业务库；不与工场抢名；不空参赌 MCP elicitation；调工具不把参数对象、数组、数字写成字符串。
+不手抄 PAT；不在聊天里要账号密码或 key；不拷贝他人 `~/.qtou`；不打开 bot 的 box 桌面代签页；不把代签/MCP 地址写成 `agent.bitilinks.cn` 或 `localhost` / `127.0.0.1`；不把 RequestUserForm 的 site 写成 IP 或 `localhost`（要用 `qtou.cn`）；不假设弹网页安全表单就能把密码交给本工具；不沿用其他 bot 的 secret-request；不直连业务库；不空参赌 MCP elicitation；调工具不把参数对象、数组、数字写成字符串。

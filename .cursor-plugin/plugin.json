@@ -1,6 +1,6 @@
 {
   "name": "qtou",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "description": "连接轻投：BP 入池、尽调检索、投后风险预警三场景，首次使用登录、支持多账号。",
   "author": {
     "name": "Bitilinks",
@@ -18,5 +18,6 @@
     "due-diligence"
   ],
   "logo": "assets/logo.png",
+  "skills": "./skills/",
   "mcpServers": "./.grok-mcp.json"
 }

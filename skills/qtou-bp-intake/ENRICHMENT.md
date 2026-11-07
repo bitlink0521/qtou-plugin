@@ -37,7 +37,7 @@ python3 <插件根目录>/tools/project-enrichment/workflow.py --pending-id <pen
 
 1. 按检索工具顺序找公司官网、工商公开页、正式披露，取正文，存成 sources 文件：`{"companyName", "queries": [{"query", "searchedAt"}], "sources": [{"url", "title", "content", "retrievedAt", "publishedDate"}]}`。
 2. 运行 `python3 <插件根目录>/tools/project-enrichment/enrich.py --company '<公司全称>' --sources-file <文件> --output <draft.json>`，返回 `proposal_required` 后按 `verify-task.json` 核实，加 `--proposal-file` 重跑得到 `draft.json`。主营业务（business）的值必须是引文里逐字出现的原话（至少 10 字）。
-3. 用户原来的确认仍有效：`agent_projects_confirm({ pendingId, confirmToken, companyFallback: <draft.json 的内容> })` 重试同一个 pendingId。法人、注册资本等工商字段留空，不从模型猜。
+3. 用户原来的确认仍有效：`agent_projects_confirm({ pendingId, companyFallback: <draft.json 的内容> })` 重试同一个 pendingId。`confirmToken` 不是该工具的入参。法人、注册资本等工商字段留空，不从模型猜。
 4. 证据被拒时如实报原因，记录保持待确认，不用空壳公司兜底。数据库或权限错误不要说成天眼查查不到。
 
 Grok API 只给无人值守脚本用（`--verifier grok`，凭据在 `~/.qtou/grok-credentials`）；你在对话里执行时不用。Tavily / Grok 密钥不进聊天、不写进文件或日志。
