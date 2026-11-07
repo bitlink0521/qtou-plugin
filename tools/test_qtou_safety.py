@@ -122,6 +122,42 @@ class SafetyTests(unittest.TestCase):
         self.assertNotIn('qtpat_', text)
         self.assertNotIn('abc123', text)
 
+    def test_readme_keeps_secret_request_then_empty_account_add(self):
+        text = open(os.path.join(os.path.dirname(__file__), '..', 'README.md'), encoding='utf-8').read()
+        self.assertIn('secret-request', text)
+        self.assertIn('QTOU_LOGIN_PASSWORD', text)
+        self.assertIn('qtou_account_add', text)
+        self.assertIn('重开或重装这个 MCP', text)
+        self.assertIn('RequestUserForm', text)
+        self.assertIn('elicitation', text)
+        self.assertNotIn('登录只有两条', text)
+        self.assertIn('普通 string', text)
+
+    def test_empty_account_add_uses_saved_env_without_prompt(self):
+        emitted = []
+        with mock.patch.dict(os.environ, {'QTOU_LOGIN_USERNAME': 'env-user', 'QTOU_LOGIN_PASSWORD': 'right'}), \
+                mock.patch.object(proxy, 'ask_credentials') as ask, \
+                mock.patch.object(proxy, 'sign_key', return_value=('qtpat_envuser', 'id-env', None)), \
+                mock.patch.object(proxy, 'emit', side_effect=emitted.append):
+            proxy.handle({'jsonrpc': '2.0', 'id': 3, 'method': 'tools/call',
+                          'params': {'name': 'qtou_account_add', 'arguments': {}}})
+        ask.assert_not_called()
+        body = json.loads(emitted[0]['result']['content'][0]['text'])
+        self.assertEqual(body['current'], 'env-user')
+        self.assertNotIn('right', json.dumps(body))
+
+    def test_empty_account_add_still_asks_when_codex_form_is_available(self):
+        proxy.session['client_form'] = True
+        emitted = []
+        with mock.patch.object(proxy, 'ask_credentials', return_value=('form-user', 'right')) as ask, \
+                mock.patch.object(proxy, 'sign_key', return_value=('qtpat_formuser', 'id-form', None)), \
+                mock.patch.object(proxy, 'emit', side_effect=emitted.append):
+            proxy.handle({'jsonrpc': '2.0', 'id': 4, 'method': 'tools/call',
+                          'params': {'name': 'qtou_account_add', 'arguments': {}}})
+        ask.assert_called()
+        body = json.loads(emitted[0]['result']['content'][0]['text'])
+        self.assertEqual(body['current'], 'form-user')
+
     def test_mismatched_env_password_is_not_reused(self):
         with mock.patch.dict(os.environ, {'QTOU_LOGIN_USERNAME': 'env-user', 'QTOU_LOGIN_PASSWORD': 'env-secret-value'}), \
                 mock.patch.object(proxy, 'sign_key') as sign:

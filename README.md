@@ -88,11 +88,14 @@ python3 -c 'import os; assert os.environ["QTOU_MCP_URL"].startswith("https://");
 ## 第一次使用
 
 1. 连上之后就可以看到 36 个工具。还没登录也可以看列表。
-2. 登录只有两条不会把密码打进聊天的路：
-   - 在你自己的终端执行 `python3 <插件目录>/tools/qtou_mcp_proxy.py --login`。程序只在这个终端能隐藏输入时询问密码。没有这种终端就直接退出，不会改用普通输入框。
-   - 或者由客户端在**启动代理之前**把密码放进该进程的 `QTOU_LOGIN_PASSWORD`（用户名放进 `QTOU_LOGIN_USERNAME`）。代理已经在跑时，先重开这个连接，再让 AI 调用 `qtou_account_add`，调用参数里不要带密码。
-3. 做不到上面任何一条，就停止。不要把密码打进对话。客户端里的普通文本框，包括 MCP 表单里的 string 字段，都不是掩码。
-4. 登录后说「检查轻投连接」。这是只读检查，工具是 `agent_health`，不需要参数。
+2. Grok Bot 在**当前这个聊天**里登录，不要自己去终端执行命令，也不要手改环境变量：
+   - 对 AI 说「登录轻投」。它用 secret-request 掩码框收取密码，可同时问用户名。网页上的 RequestUserForm 可以一起出现，但只弹出这个表单并不等于密码已经交给插件。
+   - secret-request 把密码放进**这个 bot 进程**的 `QTOU_LOGIN_PASSWORD`（用户名是 `QTOU_LOGIN_USERNAME`）。插件清单里没有要你填写的 token 字段。
+   - 如果轻投连接在填写之前就已经启动，重开或重装这个 MCP，让新进程读到该环境变量。
+   - 然后再让 AI 调用 `qtou_account_add`，不要在参数里放密码。
+3. 没有 secret-request、重连后环境里仍然没有密码、并且客户端也没有弹出可用的登录表单时，停止。不要把密码打进对话。
+4. Codex 若没有已存账号、也没有上述环境变量，空参 `qtou_account_add` 仍会走客户端自己的 elicitation。这个字段在工具定义里是普通 string，本程序不能把它变成掩码。这是 Codex 的补充路径，不是 Grok Bot 的登录方式。表单被取消就停止。
+5. 登录后说「检查轻投连接」。这是只读检查，工具是 `agent_health`，不需要参数。
 
 用户名参数不能搭配另一个账号留在环境里的密码。退出账号只删除本机保存的那个账号；如果当前只用了环境变量里的连接 token，退出会让本进程停止使用它，并请你在客户端去掉 `QTOU_CONNECTOR_TOKEN` 后重开连接。
 

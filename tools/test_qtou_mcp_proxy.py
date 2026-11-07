@@ -379,9 +379,8 @@ class ProxyTests(unittest.TestCase):
 
     def test_add_switch_and_list_accounts(self):
         self.login_as('u1')
-        with mock.patch.object(proxy, 'ask_credentials') as ask:
-            added, _ = call('qtou_account_add', username='u2', password='right')
-        ask.assert_not_called()
+        with mock.patch.object(proxy, 'ask_credentials', return_value=('u2', 'right')):
+            added, _ = call('qtou_account_add')
         self.assertEqual(added['current'], 'u2')
         switched, _ = call('qtou_account_switch', username='u1')
         self.assertEqual(switched['current'], 'u1')

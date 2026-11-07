@@ -63,8 +63,9 @@ AUTH_REQUIRED_MESSAGE = (
     '代签地址（轻投演示站 74，代理/宿主 POST 用，写死，禁止写成 agent.bitilinks.cn、localhost 或 127.0.0.1）：'
     + DEFAULT_AUTH_LOGIN_URL
     + '。字段：username=轻投用户名，password=轻投密码。'
-    '没有安全输入时停止：普通文本框（包括 MCP elicitation 的 string 字段）不是掩码。'
-    '可执行的做法只有：在终端运行 python3 tools/qtou_mcp_proxy.py --login，或在本进程启动前写入 QTOU_LOGIN_PASSWORD。'
+    'Grok Bot：在当前聊天用 secret-request 掩码框写入 QTOU_LOGIN_PASSWORD 后，若代理已启动必须重连该 MCP，再空参调用 qtou_account_add。'
+    'RequestUserForm 不能代替这次交密。Codex 在没有参数和环境变量时仍可走 elicitation；该字段在 schema 里是普通 string，不是本程序提供的掩码。'
+    'elicitation 取消、没有表单、也没有 secret-request 时停止，不要把密码打进聊天。'
     '登录成功后不必清除环境变量。禁止：拷贝他人 ~/.qtou 或 qtpat_ key；打开 bot 的 box 桌面代签页；在聊天里要明文密码；'
     '不要假设仅弹出网页安全表单就能把密码交给本工具；不要用工具参数覆盖代签站点或 URL。'
     '写入后调用 agent_health 冒烟。'
@@ -605,7 +606,7 @@ def call_local_tool(name, arguments):
                                        'login': auth_required_data()}, is_error=True)
                 save_account(username, key, key_id)
             else:
-                raise LoginCancelled()
+                login(reason='添加轻投账号。')
         return tool_result(dict(account_summary(), message='已登录并切换到新账号'))
     with login_lock:
         return _switch_or_logout(name, arguments)
@@ -841,10 +842,8 @@ def serve():
 
 def main():
     if sys.argv[1:] == ['--login']:
-        if not sys.stdin.isatty():
-            sys.exit('没有可隐藏输入的终端。请在终端运行 python3 tools/qtou_mcp_proxy.py --login，或在启动代理之前设置 QTOU_LOGIN_PASSWORD。')
         try:
-            login(use_terminal=True)
+            login(use_terminal=sys.stdin.isatty())
         except LoginCancelled:
             sys.exit('已取消登录。')
         print('已登录轻投并设为当前账号（key 本身未显示）。')
