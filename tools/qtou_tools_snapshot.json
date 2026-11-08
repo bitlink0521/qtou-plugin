@@ -454,6 +454,10 @@
         ],
         "additionalProperties": false
        }
+      },
+      "teamAbsentReason": {
+       "type": "string",
+       "description": "team 为空时必填：说明逐页看过 BP（含图片页）确实没有团队信息；有团队就写 team，不填本项"
       }
      },
      "required": [
@@ -970,6 +974,10 @@
         ],
         "additionalProperties": false
        }
+      },
+      "teamAbsentReason": {
+       "type": "string",
+       "description": "team 为空时必填：说明逐页看过 BP（含图片页）确实没有团队信息；有团队就写 team，不填本项"
       }
      },
      "required": [
@@ -1362,6 +1370,22 @@
   }
  },
  {
+  "name": "agent_documents_download_url",
+  "description": "场景②：给站内 .docx 报告签发约10分钟有效的下载地址（只读，限本租户），用来沿用已有尽调报告/投资建议书的 Word 版式；用 curl 带返回的请求头下载到本地，文件不进对话",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "fileId": {
+     "type": "string",
+     "description": "文档 fileId（来自 agent_documents_search，须是 .docx）"
+    }
+   },
+   "required": [
+    "fileId"
+   ]
+  }
+ },
+ {
   "name": "agent_portfolio_list",
   "description": "场景③：投后/项目名单（只读，限本租户）。afterInvestOnly=true 只列投后项目；每条含 projectId、项目名、公司全称、法人、成立日期、行业、投资日期，用于外网查询消歧",
   "inputSchema": {
@@ -1740,7 +1764,7 @@
      "type": "array",
      "description": "[{projectId,query,source,hits,status,error}]",
      "items": {
-      "$ref": "$.result.tools[24].inputSchema.properties.sources.items"
+      "$ref": "$.result.tools[25].inputSchema.properties.sources.items"
      }
     },
     "runId": {
