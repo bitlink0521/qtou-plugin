@@ -5,7 +5,7 @@ class ClientTests(unittest.TestCase):
   for url in ['https://qtou.cn/api','ftp://127.0.0.1/api/v1/agent/mcp','http://u:p@localhost:8081/api/v1/agent/mcp','http://127.0.0.1:8081/api/v1/agent/mcp?x=1']:
    with self.assertRaises(McpError): LocalMcpClient(url)
  def test_server_allowed(self):
-  for url in ['http://113.250.189.74:18081/api/v1/agent/mcp','https://qtou.example.com/api/v1/agent/mcp','http://127.0.0.1:8081/api/v1/agent/mcp']:
+  for url in ['http://192.168.110.142:18081/api/v1/agent/mcp','https://qtou.example.com/api/v1/agent/mcp','http://127.0.0.1:8081/api/v1/agent/mcp']:
    LocalMcpClient(url)
  def test_env_token(self):
   import os,mcp_client

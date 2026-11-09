@@ -167,7 +167,7 @@ class ProxyTests(unittest.TestCase):
 
     def test_default_login_url_is_demo_74_not_factory_or_localhost(self):
         self.assertEqual(proxy.DEFAULT_AUTH_LOGIN_URL,
-                         'http://113.250.189.74:18081/api/v1/agent/auth/login')
+                         'http://192.168.110.142:18081/api/v1/agent/auth/login')
         self.assertNotIn('agent.bitilinks.cn', proxy.DEFAULT_AUTH_LOGIN_URL)
         self.assertNotIn('localhost', proxy.DEFAULT_AUTH_LOGIN_URL)
         self.assertNotIn('127.0.0.1', proxy.DEFAULT_AUTH_LOGIN_URL)
@@ -542,8 +542,9 @@ class UnauthenticatedStdioDiscoveryTests(unittest.TestCase):
             self.assertNotEqual((listed.get('error') or {}).get('code'), -32001)
             tools = listed['result']['tools']
             names = [tool['name'] for tool in tools]
-            self.assertEqual(set(names), self.LOCAL_NAMES)
-            self.assertEqual(len(tools), 4)
+            self.assertTrue(self.LOCAL_NAMES <= set(names))
+            self.assertIn('agent_projects_create_pending', names)  # signed-out listing includes the business tools snapshot
+            self.assertGreater(len(tools), 4)
         finally:
             for stream in (proc.stdin, proc.stdout, proc.stderr):
                 if stream:
@@ -641,8 +642,9 @@ class UnauthenticatedStdioDiscoveryTests(unittest.TestCase):
             self.assertNotEqual((listed.get('error') or {}).get('code'), -32001)
             tools = listed['result']['tools']
             names = [tool['name'] for tool in tools]
-            self.assertEqual(set(names), self.LOCAL_NAMES)
-            self.assertEqual(len(tools), 4)
+            self.assertTrue(self.LOCAL_NAMES <= set(names))
+            self.assertIn('agent_projects_create_pending', names)  # signed-out listing includes the business tools snapshot
+            self.assertGreater(len(tools), 4)
         finally:
             for stream in (proc.stdin, proc.stdout, proc.stderr):
                 if stream:

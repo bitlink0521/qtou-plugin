@@ -2,7 +2,7 @@
   "mcpServers": {
     "qtou": {
       "type": "http",
-      "url": "http://113.250.189.74:18081/api/v1/agent/mcp",
+      "url": "http://192.168.110.142:18081/api/v1/agent/mcp",
       "headers": {
         "Authorization": "Bearer ${QTOU_CONNECTOR_TOKEN}"
       }
