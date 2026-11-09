@@ -51,6 +51,17 @@ class ReviewTests(unittest.TestCase):
         self.assertIn('legalRepresentative',enrich.review(COMPANY,p,[legal_source],{})['missingOnlyPatch'])
         self.assertFalse(enrich.authoritative('https://cninfo.com.cn.evil.example/doc'))
 
+    def test_registry_mirrors_count_for_legal_fields_but_aggregators_do_not(self):
+        quote=QUOTE+'法定代表人为测试法人。'
+        p=proposal('legalRepresentative','测试法人'); p['fields'][0]['evidence'][0]['quote']=quote
+        for url,ok in [('https://www.tianyancha.com/company/1','yes'),('https://www.qcc.com/firm/x.html','yes'),
+                       ('https://aiqicha.baidu.com/company_detail_1','yes'),('https://www.qixin.com/company/x','yes'),
+                       ('https://www.cbi360.net/hhb/sg_1/',''),('https://www.11467.com/qiye/1.htm','')]:
+            row=source(url); row['content']=quote
+            patched='legalRepresentative' in enrich.review(COMPANY,p,[row],{})['missingOnlyPatch']
+            self.assertEqual(patched,bool(ok),url)
+        self.assertFalse(enrich.authoritative('https://qcc.com.evil.example/x'))
+
     def test_duplicate_unknown_conflict_fields_not_writable(self):
         p=proposal();p['fields']*=2
         with self.assertRaises(enrich.EnrichmentError):enrich.review(COMPANY,p,[source()],{})

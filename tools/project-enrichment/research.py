@@ -8,7 +8,7 @@ GROUPS = {
  'official': ('官网 联系我们 公司介绍 英文名称', ('companyWebsite','officeAddress','contactNumber','companyMailbox','companyProfile','englishName','abbreviation','officialAccounts','projectShorthand')),
  'disclosure': ('公告 年报 主营业务 商业模式 员工人数 高新技术企业 上市 荣誉', ('primaryBusiness','businessModel','staffNumber','nature','isMinorEnterprises','isHighNewEnterprises','isListing','honour','yewu')),
 }
-OFFICIAL = ['gsxt.gov.cn','cninfo.com.cn','neeq.com.cn','sse.com.cn','szse.cn']
+OFFICIAL = ['gsxt.gov.cn','cninfo.com.cn','neeq.com.cn','sse.com.cn','szse.cn','tianyancha.com','qcc.com','aiqicha.baidu.com','qixin.com']
 # Tavily (plugin or HTTP key), else whatever web search the calling agent has; bodies come from opened pages.
 SEARCH_SOURCES = ('tavily_plugin','tavily_http','agent_search')
 

@@ -26,7 +26,7 @@ python3 <插件根目录>/tools/project-enrichment/workflow.py --pending-id <pen
 
 核实规则：
 - 同名公司、子公司、母公司、关联公司的信息不能写到本公司；拿不准就留空。
-- 法人、注册资本、成立日期、股东只采工商公示或正式公告；注册资本带单位（元 / 万元）。
+- 法人、注册资本、成立日期、统一社会信用代码、登记机关、注册地址、股东只采工商登记信息：国家企业信用信息公示系统、正式公告，或天眼查 / 企查查 / 爱企查 / 启信宝的公司公开页（它们转载工商公示，页面须出现本公司全称）；招聘站、黄页、建设通这类聚合站不算。公示系统有验证码打不开时，就去这四家找，不要因为打不开公示系统就留空。注册资本带单位（元 / 万元）。
 - 员工数核对时点和范围，参保人数、「公司及控股子公司」人数不是本公司员工数；资质核对有效期。
 - 新三板挂牌不等于 A 股上市；地区、币种、状态、工商类型按字典映射，不猜 ID。
 - 页面上 AI 生成的分析段不算披露事实。
@@ -37,7 +37,7 @@ python3 <插件根目录>/tools/project-enrichment/workflow.py --pending-id <pen
 
 1. 按检索工具顺序找公司官网、工商公开页、正式披露，取正文，存成 sources 文件：`{"companyName", "queries": [{"query", "searchedAt"}], "sources": [{"url", "title", "content", "retrievedAt", "publishedDate"}]}`。
 2. 运行 `python3 <插件根目录>/tools/project-enrichment/enrich.py --company '<公司全称>' --sources-file <文件> --output <draft.json>`，返回 `proposal_required` 后按 `verify-task.json` 核实，加 `--proposal-file` 重跑得到 `draft.json`。主营业务（business）的值必须是引文里逐字出现的原话（至少 10 字）。
-3. 用户原来的确认仍有效：`agent_projects_confirm({ pendingId, confirmToken, companyFallback: <draft.json 的内容> })` 重试同一个 pendingId。法人、注册资本等工商字段留空，不从模型猜。
+3. 用户原来的确认仍有效：`agent_projects_confirm({ pendingId, confirmToken, companyFallback: <draft.json 的内容> })` 重试同一个 pendingId。法人、注册资本等工商字段这一步先留空，不从模型猜；入池后第 8 步按上面的工商来源补齐。
 4. 证据被拒时如实报原因，记录保持待确认，不用空壳公司兜底。数据库或权限错误不要说成天眼查查不到。
 
 Grok API 只给无人值守脚本用（`--verifier grok`，凭据在 `~/.qtou/grok-credentials`）；你在对话里执行时不用。Tavily / Grok 密钥不进聊天、不写进文件或日志。

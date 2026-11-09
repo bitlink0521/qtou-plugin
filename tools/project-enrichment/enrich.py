@@ -184,10 +184,15 @@ def proposal_required(error):
             'next': '按task里的instructions和schema只依据publicSources核实，输出JSON后用--proposal-file重跑'}
 
 
+# Government registry and exchanges, plus the business-registry mirrors that republish 工商公示 data
+# (gsxt.gov.cn itself sits behind a captcha that agents cannot pass).
+AUTHORITATIVE_HOSTS = ('cninfo.com.cn', 'sse.com.cn', 'szse.cn', 'bse.cn', 'neeq.com.cn',
+                       'tianyancha.com', 'qcc.com', 'aiqicha.baidu.com', 'qixin.com')
+
+
 def authoritative(url):
     host = urlsplit(url).hostname or ''
-    return host.endswith('.gov.cn') or any(host == d or host.endswith('.' + d)
-        for d in ('cninfo.com.cn', 'sse.com.cn', 'szse.cn', 'neeq.com.cn'))
+    return host.endswith('.gov.cn') or any(host == d or host.endswith('.' + d) for d in AUTHORITATIVE_HOSTS)
 
 
 def review(company, proposed, sources, existing):
