@@ -9,7 +9,7 @@
   "license": "MIT",
   "keywords": ["qtou", "轻投", "mcp", "venture", "bp", "due-diligence"],
   "logo": "assets/logo.png",
-  "mcpUrl": "http://192.168.110.142:18081/api/v1/agent/mcp",
+  "mcpUrl": "http://82.157.40.213:8133/api/v1/agent/mcp",
   "proxy": "tools/qtou_mcp_proxy.py",
   "interface": {
     "displayName": "轻投",
