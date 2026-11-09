@@ -1,6 +1,6 @@
 {
   "name": "qtou",
-  "version": "0.4.4",
+  "version": "0.5.0",
   "marketplace": "qtou-plugin",
   "description": "连接轻投：BP 入池、尽调检索、投后风险预警三场景，首次使用登录、支持多账号。",
   "author": {"name": "Bitilinks", "email": "support@handsels.com"},
@@ -9,7 +9,7 @@
   "license": "MIT",
   "keywords": ["qtou", "轻投", "mcp", "venture", "bp", "due-diligence"],
   "logo": "assets/logo.png",
-  "mcpUrl": "http://113.250.189.74:18081/api/v1/agent/mcp",
+  "mcpUrl": "http://82.157.40.213:8133/api/v1/agent/mcp",
   "proxy": "tools/qtou_mcp_proxy.py",
   "interface": {
     "displayName": "轻投",

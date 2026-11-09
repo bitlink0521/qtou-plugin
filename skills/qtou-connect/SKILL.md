@@ -10,17 +10,17 @@ description: >-
 
 **默认登录（宿主 bot，如 Grok Bot / 轻投专家）**：未登录 / 401 / 第一次安装，**直接由宿主发起安全登录**采集轻投用户名与密码。不要先调空的 `qtou_account_add` 去赌 MCP elicitation。elicitation 若被取消、报 `-32001`，或用户说「没看到 / 看不到表单」，立刻改为宿主安全登录，不要再试 elicitation。插件自己弹不出宿主的安全采集控件；未登录时工具可能返回 JSON-RPC `-32001`，`error.data` 为 `AUTH_REQUIRED`（`action=HostSecureLogin`，含代签地址、字段，以及 `secretRequest=QTOU_LOGIN_PASSWORD`），宿主应按此发起安全登录。
 
-注意：仅弹出网页类安全表单（例如只能把密文交给浏览器填充的 RequestUserForm）**不等于**已经把密码交给了本插件。RequestUserForm 可以和下面的 secret-request **并存**，但不能代替交密通路。密码不得进聊天、不得打印。若使用 RequestUserForm，`site` 必须是域名 `qtou.cn`（禁止 IP、`localhost`、`127.0.0.1`、`agent.bitilinks.cn`）；代签 POST 地址（演示站 74）**不是**表单 site，二者不要混用，也不允许用工具参数覆盖站点和 URL。
+注意：仅弹出网页类安全表单（例如只能把密文交给浏览器填充的 RequestUserForm）**不等于**已经把密码交给了本插件。RequestUserForm 可以和下面的 secret-request **并存**，但不能代替交密通路。密码不得进聊天、不得打印。若使用 RequestUserForm，`site` 必须是域名 `qtou.cn`（禁止 IP、`localhost`、`127.0.0.1`、`agent.bitilinks.cn`）；代签 POST 地址（演示环境）**不是**表单 site，二者不要混用，也不允许用工具参数覆盖站点和 URL。
 
 **首登流程（宿主 bot）**：
 
 1. 已连且冒烟（`agent_health`）通则结束。
 2. 未登录：**先问用户名，再收密码**。先在聊天里问轻投用户名（用户名不是密钥，可以明文回答）；用户回答后，宿主再发 `secret-request` 掩码框，把密码写入环境变量 `QTOU_LOGIN_PASSWORD`，填完直接进入第 3 步登录，不要再回头问用户名。**每个 bot 必须使用自己发起的 secret-request**，不能沿用其他 bot 写入的变量。secret-request 写入的是发起该请求的那个 bot 的 `process.env`；stdio 代理在启动时才能读到这些变量，所以填写后若代理是早就拉起的，需要重装/重连该 MCP 后再调用登录工具。
 3. 再调用 `qtou_account_add`（可以只传 `username`，或不传 password）。代理取凭据的优先级是：工具参数 > 环境变量 `QTOU_LOGIN_PASSWORD` / `QTOU_LOGIN_USERNAME` > Codex elicitation。三者都没有则返回 `AUTH_REQUIRED`，并提示宿主用 secret-request（变量名 `QTOU_LOGIN_PASSWORD`）。
-4. 代理把账密 POST 到写死的代签 URL `http://113.250.189.74:18081/api/v1/agent/auth/login`（站点和 URL 不允许覆盖），只把返回的 key 写入本机 `~/.qtou/`，不写密码。登录成功后**不清除**环境变量。密码不进日志、不进报错、不进返回值。若连接器是 HTTP，也可由宿主把账密 POST 到代签地址，将返回的 `agentKey` 写入插件变量 `QTOU_CONNECTOR_TOKEN`（key 永不进聊天）。然后 `agent_health` 冒烟。登录、切换或退出账号后代理会发 `notifications/tools/list_changed`，宿主应重新拉取工具列表；若登录后仍只有 `qtou_account_*` 四个工具，重连该 MCP 后再继续，不要因此判定入池不可用。
+4. 代理把账密 POST 到写死的代签 URL `http://82.157.40.213:8133/api/v1/agent/auth/login`（站点和 URL 不允许覆盖），只把返回的 key 写入本机 `~/.qtou/`，不写密码。登录成功后**不清除**环境变量。密码不进日志、不进报错、不进返回值。若连接器是 HTTP，也可由宿主把账密 POST 到代签地址，将返回的 `agentKey` 写入插件变量 `QTOU_CONNECTOR_TOKEN`（key 永不进聊天）。然后 `agent_health` 冒烟。登录、切换或退出账号后代理会发 `notifications/tools/list_changed`，宿主应重新拉取工具列表；若登录后仍只有 `qtou_account_*` 四个工具，重连该 MCP 后再继续，不要因此判定入池不可用。
 5. Codex / WorkBuddy / Grok 命令行补充路径：插件的 `qtou` 连接由 `tools/qtou_mcp_proxy.py` 启动。没有可用账号、没有环境变量、也没有传入参数时，它仍可请客户端弹出 MCP 表单（不支持表单的客户端改用 macOS 对话框），签发后保存在本机 `~/.qtou/`，之后自动复用。表单内容只回给启动器，不进聊天。这不是宿主 bot 的默认路径。若返回 `AUTH_REQUIRED` / `-32001`，改由宿主发 secret-request，不要循环空参 `qtou_account_add`。
 
-代签登录 URL（演示站 74，写死，供代理/宿主 POST）：`http://113.250.189.74:18081/api/v1/agent/auth/login`。禁止写成 `agent.bitilinks.cn`（工场）或 `localhost` / `127.0.0.1`，也不允许用 `qtou_account_add` 的参数覆盖。
+代签登录 URL（演示环境，写死，供代理/宿主 POST）：`http://82.157.40.213:8133/api/v1/agent/auth/login`。禁止写成 `agent.bitilinks.cn`（工场）或 `localhost` / `127.0.0.1`，也不允许用 `qtou_account_add` 的参数覆盖。
 
 ## 多账号（插件启动器提供的本地工具）
 
@@ -35,14 +35,14 @@ description: >-
 
 | 项 | 值 |
 | --- | --- |
-| MCP URL | `http://113.250.189.74:18081/api/v1/agent/mcp`（可用环境变量 `QTOU_MCP_URL` 覆盖；默认即此地址。禁止写成 `agent.bitilinks.cn` 或 `localhost` / `127.0.0.1`） |
-| 代签登录 URL（演示 74，写死） | `http://113.250.189.74:18081/api/v1/agent/auth/login`（可用 `QTOU_LOGIN_URL` 覆盖代理自己的 POST 目标；禁止写成工场或 localhost） |
+| MCP URL | `http://82.157.40.213:8133/api/v1/agent/mcp`（可用环境变量 `QTOU_MCP_URL` 覆盖；默认即此地址。禁止写成 `agent.bitilinks.cn` 或 `localhost` / `127.0.0.1`） |
+| 代签登录 URL（演示环境，写死） | `http://82.157.40.213:8133/api/v1/agent/auth/login`（可用 `QTOU_LOGIN_URL` 覆盖代理自己的 POST 目标；禁止写成工场或 localhost） |
 | 传输 | Streamable HTTP |
 | 鉴权 | `Authorization: Bearer <agent_key>` |
 | 连接器名 | `qtou`（Grok 上手工添加的可能叫 `轻投`，二者等价） |
 | 插件变量 | `QTOU_CONNECTOR_TOKEN` |
 
-签发：宿主用 secret-request（可与 RequestUserForm 并存）采集账密（不收 PAT，不在聊天里要明文密码）→ 调用 `qtou_account_add`（读参数或环境变量 `QTOU_LOGIN_PASSWORD` / 可选 `QTOU_LOGIN_USERNAME`）或代调 `POST http://113.250.189.74:18081/api/v1/agent/auth/login` → 得窄 scope `agentKey` → 由插件写入本机或写入 `QTOU_CONNECTOR_TOKEN`。登录成功后不清除环境变量。审计不写密码明文；key 永不进聊天。
+签发：宿主用 secret-request（可与 RequestUserForm 并存）采集账密（不收 PAT，不在聊天里要明文密码）→ 调用 `qtou_account_add`（读参数或环境变量 `QTOU_LOGIN_PASSWORD` / 可选 `QTOU_LOGIN_USERNAME`）或代调 `POST http://82.157.40.213:8133/api/v1/agent/auth/login` → 得窄 scope `agentKey` → 由插件写入本机或写入 `QTOU_CONNECTOR_TOKEN`。登录成功后不清除环境变量。审计不写密码明文；key 永不进聊天。
 
 ## 只走 MCP 工具（强制）
 

@@ -8,8 +8,8 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import urlsplit
 
-DEFAULT_MCP_URL = os.environ.get('QTOU_MCP_URL') or 'http://113.250.189.74:18081/api/v1/agent/mcp'
-DEFAULT_AUTH_LOGIN_URL = 'http://113.250.189.74:18081/api/v1/agent/auth/login'
+DEFAULT_MCP_URL = os.environ.get('QTOU_MCP_URL') or 'http://82.157.40.213:8133/api/v1/agent/mcp'
+DEFAULT_AUTH_LOGIN_URL = 'http://82.157.40.213:8133/api/v1/agent/auth/login'
 
 
 def auth_login_url():

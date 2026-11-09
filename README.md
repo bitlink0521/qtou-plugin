@@ -8,11 +8,11 @@
 
 插件 = **MCP（轻投工具）+ 技能（使用规则）**。只接 MCP 也能调工具，但没有技能时 AI 不知道「入池先出确认卡」「预警必须带出处」这些规矩，所以两样都要装。
 
-默认连接演示环境 `http://113.250.189.74:18081/api/v1/agent/mcp`。
+默认连接演示环境 `http://82.157.40.213:8133/api/v1/agent/mcp`（2026-11-09 起演示环境从 74 迁到公司内网服务器，经 NPS 映射到这个公网地址）。
 
 ## 登录
 
-默认代签登录地址（轻投演示站 74，写死）：`http://113.250.189.74:18081/api/v1/agent/auth/login`。可用环境变量 `QTOU_LOGIN_URL` 覆盖，但**禁止**写成 `agent.bitilinks.cn`（那是工场，不是轻投）、`localhost` 或 `127.0.0.1`（安全表单会拒绝）。MCP 默认地址是 `http://113.250.189.74:18081/api/v1/agent/mcp`，可用 `QTOU_MCP_URL` 覆盖，同样不要写成工场或 localhost。
+默认代签登录地址（轻投演示环境，写死）：`http://82.157.40.213:8133/api/v1/agent/auth/login`。可用环境变量 `QTOU_LOGIN_URL` 覆盖，但**禁止**写成 `agent.bitilinks.cn`（那是工场，不是轻投）、`localhost` 或 `127.0.0.1`（安全表单会拒绝）。MCP 默认地址是 `http://82.157.40.213:8133/api/v1/agent/mcp`，可用 `QTOU_MCP_URL` 覆盖，同样不要写成工场或 localhost。
 
 **Grok Bot 等宿主 bot（默认路径）**：未登录 / 401 / 第一次安装时，由宿主发起安全登录采集轻投用户名与密码。不要先调空的 `qtou_account_add` 去赌 MCP elicitation；若 elicitation 被取消、报 `-32001`，或用户看不到表单，立刻改由宿主安全登录。插件自己弹不出宿主的安全采集控件；未登录时可能返回 JSON-RPC `-32001`，`error.data` 为 `AUTH_REQUIRED`（`action=HostSecureLogin`，含 `secretRequest=QTOU_LOGIN_PASSWORD`），宿主应按此处理。仅弹出网页类安全表单并不等于密码已交给插件；RequestUserForm 可与 secret-request 并存，但不能代替交密。
 
@@ -47,7 +47,7 @@ codex plugin add qtou@qtou-plugin
 
 在 **Connect Apps / 插件市场** 搜索并安装 **qtou**（市场条目 id `85237826`；也可让 bot 执行安装）。
 
-装好后连接器走本机 `tools/qtou_mcp_proxy.py`（stdio）：首次使用时由宿主 bot 先发 secret-request（变量名 `QTOU_LOGIN_PASSWORD`，每个 bot 自己发；可与 RequestUserForm 并存），再调用 `qtou_account_add` 写入本机 `~/.qtou/`；不要赌 MCP elicitation，不要手填 `qtpat_…`，不要拷贝 `~/.qtou`，不要打开 bot 的 box 桌面代签。代签地址见上文，写死为演示站 74，不允许用参数覆盖。
+装好后连接器走本机 `tools/qtou_mcp_proxy.py`（stdio）：首次使用时由宿主 bot 先发 secret-request（变量名 `QTOU_LOGIN_PASSWORD`，每个 bot 自己发；可与 RequestUserForm 并存），再调用 `qtou_account_add` 写入本机 `~/.qtou/`；不要赌 MCP elicitation，不要手填 `qtpat_…`，不要拷贝 `~/.qtou`，不要打开 bot 的 box 桌面代签。代签地址见上文，写死为演示环境，不允许用参数覆盖。
 
 手动配 HTTP 的可继续用根目录 `mcp.json`（Bearer `${QTOU_CONNECTOR_TOKEN}`）。
 
