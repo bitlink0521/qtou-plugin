@@ -491,8 +491,9 @@ def confirm_message(name, arguments):
         lines.append('待确认编号：' + str(arguments.get('pendingId') or ''))
         return '\n'.join(lines)
     grade = {'high': '高（网页显示「重大」）', 'medium': '中（网页显示「警告」）', 'low': '低（网页显示「警告」）'}
+    project = call_upstream_tool('agent_portfolio_quarterly', {'projectId': arguments.get('projectId')})
     return '\n'.join(['确认把这条风险预警写入轻投？',
-                      '项目：' + str(arguments.get('projectId') or ''),
+                      '项目：' + (first_value(project, 'projectName', 'project_name') or str(arguments.get('projectId') or '')),
                       '等级：' + grade.get(str(arguments.get('grade')), str(arguments.get('grade') or '')),
                       '事件：' + str(arguments.get('matters') or arguments.get('theme') or ''),
                       '结论：' + str(arguments.get('conclusion') or arguments.get('evidence') or '')[:300]])
