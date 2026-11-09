@@ -29,11 +29,13 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+import zipfile
 
 import qtou_shared
 from qtou_shared import MIGRATED_ACCOUNT_NAME, parse_mcp_body, write_private
@@ -102,6 +104,21 @@ LOCAL_TOOLS = [
     {'name': 'qtou_account_logout',
      'description': '退出一个轻投账号并在服务端吊销它的 key；不传 username 则退出当前账号。',
      'inputSchema': {'type': 'object', 'properties': {'username': {'type': 'string', 'description': '要退出的账号用户名'}}}},
+    {'name': 'qtou_report_word',
+     'description': ('场景②：把写好的尽调报告 / 投资建议书 Markdown 生成 Word（.docx）。由本插件下载站内范本 Word 并沿用它的字体、'
+                     '标题编号、页面和页眉页脚，自动加封面和目录；范本按顺序试，都下不到就用插件自带模板。'
+                     '尽调报告的 Word 只用本工具生成，不用其他 Word 技能或自写脚本。路径都写本机绝对路径。'),
+     'inputSchema': {'type': 'object', 'properties': {
+         'markdownPath': {'type': 'string', 'description': '报告 Markdown 文件的绝对路径'},
+         'outputPath': {'type': 'string', 'description': '要生成的 .docx 绝对路径，所在目录须已存在'},
+         'company': {'type': 'string', 'description': '公司全称（封面）'},
+         'title': {'type': 'string', 'description': '报告名称（封面），如「尽职调查报告」「投资建议书」'},
+         'org': {'type': 'string', 'description': '基金或管理人全称（封面，可空）'},
+         'date': {'type': 'string', 'description': '封面日期，如 2026年11月（可空）'},
+         'styleFileIds': {'type': 'array', 'items': {'type': 'string'},
+                          'description': '站内范本 .docx 的 fileId，按优先顺序（来自 agent_documents_search）'},
+         'stylePath': {'type': 'string', 'description': '用户提供的本机模板 .docx 绝对路径，优先于站内范本'},
+     }, 'required': ['markdownPath', 'outputPath', 'company']}},
 ]
 LOCAL_TOOL_NAMES = {tool['name'] for tool in LOCAL_TOOLS}
 TOOLS_CACHE_PATH = os.path.expanduser('~/.qtou/tools-cache.json')
@@ -406,6 +423,8 @@ def account_summary():
 
 
 def call_local_tool(name, arguments):
+    if name == 'qtou_report_word':
+        return report_word(arguments)
     if name == 'qtou_account_list':
         return tool_result(account_summary())
     if name == 'qtou_account_add':
@@ -449,6 +468,78 @@ def call_local_tool(name, arguments):
         note = '服务端 key 已吊销' if revoked else '本机已删除；服务端 key 未能吊销（可能已失效），可在轻投网页管理'
         return tool_result(dict(account_summary(), message='已退出 %s，%s' % (username, note)))
     return tool_result({'error': {'code': 'NOT_FOUND', 'message': '未知工具', 'tool': name}}, is_error=True)
+
+
+REPORT_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dd_report_docx.py')
+MAX_STYLE_BYTES = 30 * 1024 * 1024
+
+
+def download_style(file_id, directory):
+    """Fetch one site .docx through the signed download URL; returns (path, name) or raises ValueError."""
+    payload = call_upstream_tool('agent_documents_download_url', {'fileId': file_id})
+    if not payload.get('url'):
+        raise ValueError(((payload.get('error') or {}).get('message')) or '没有拿到下载地址')
+    if not payload['url'].startswith(API_BASE + '/'):
+        raise ValueError('下载地址不在轻投服务上')
+    headers = dict(payload.get('headers') or {}, **{'User-Agent': USER_AGENT})
+    request = urllib.request.Request(payload['url'], headers=headers)
+    path = os.path.join(directory, file_id + '.docx')
+    with urllib.request.urlopen(request, timeout=180) as response, open(path, 'wb') as out:
+        total = 0
+        while True:
+            chunk = response.read(65536)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > MAX_STYLE_BYTES:
+                raise ValueError('范本超过 30MB')
+            out.write(chunk)
+    if not zipfile.is_zipfile(path):
+        raise ValueError('下载到的不是有效的 .docx')
+    return path, payload.get('fileName') or file_id
+
+
+def report_word(arguments):
+    markdown, output = _string_arg(arguments, 'markdownPath'), _string_arg(arguments, 'outputPath')
+    company = _string_arg(arguments, 'company')
+    problem = None
+    if not os.path.isabs(markdown) or not os.path.isfile(markdown):
+        problem = 'markdownPath 须是已存在文件的绝对路径'
+    elif not os.path.isabs(output) or not output.lower().endswith('.docx') or not os.path.isdir(os.path.dirname(output)):
+        problem = 'outputPath 须是 .docx 绝对路径，且所在目录已存在'
+    elif not company:
+        problem = 'company 必填（公司全称）'
+    if problem:
+        return tool_result({'error': {'code': 'INVALID_ARGUMENT', 'message': problem, 'tool': 'qtou_report_word'}}, is_error=True)
+    style_path = _string_arg(arguments, 'stylePath')
+    style = {'source': 'user', 'path': style_path} if style_path else None
+    if style_path and not (os.path.isfile(style_path) and zipfile.is_zipfile(style_path)):
+        return tool_result({'error': {'code': 'INVALID_ARGUMENT', 'message': 'stylePath 不是有效的 .docx',
+                                      'tool': 'qtou_report_word'}}, is_error=True)
+    skipped = []
+    with tempfile.TemporaryDirectory(prefix='qtou-style-') as work:
+        if not style:
+            for file_id in arguments.get('styleFileIds') or []:
+                try:
+                    style_path, name = download_style(str(file_id), work)
+                    style = {'source': 'site', 'fileId': str(file_id), 'fileName': name}
+                    break
+                except Exception as error:
+                    skipped.append({'fileId': str(file_id), 'reason': str(error)[:200]})
+        command = [sys.executable, REPORT_SCRIPT, markdown, '-o', output, '--company', company,
+                   '--title', _string_arg(arguments, 'title') or '尽职调查报告']
+        for flag, name in (('--org', 'org'), ('--date', 'date')):
+            if _string_arg(arguments, name):
+                command += [flag, _string_arg(arguments, name)]
+        if style:
+            command += ['--style', style_path]
+        run = subprocess.run(command, capture_output=True, text=True, timeout=300)
+    if run.returncode != 0 or not os.path.isfile(output):
+        return tool_result({'error': {'code': 'INTERNAL_ERROR', 'message': (run.stderr or run.stdout).strip()[-500:] or '生成失败',
+                                      'tool': 'qtou_report_word'}}, is_error=True)
+    return tool_result({'outputPath': output, 'sizeBytes': os.path.getsize(output),
+                        'style': style or {'source': 'plugin-template'}, 'stylesSkipped': skipped,
+                        'message': run.stdout.strip()})
 
 
 CONFIRM_TOOLS = {'agent_projects_confirm', 'agent_risk_alerts_create'}

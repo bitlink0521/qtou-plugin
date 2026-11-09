@@ -4,6 +4,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import zipfile
 import unittest
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -480,11 +481,57 @@ class ImageResultTest(unittest.TestCase):
         self.assertEqual(plain['result']['structuredContent'], {'a': 1})
 
 
+class ReportWordTests(unittest.TestCase):
+    TEMPLATE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'assets', 'dd-report-template.docx')
+
+    def setUp(self):
+        self.work = tempfile.TemporaryDirectory()
+        self.markdown = os.path.join(self.work.name, 'r.md')
+        with open(self.markdown, 'w', encoding='utf-8') as out:
+            out.write('# 摘要\n测试公司。\n\n| 项目 | 内容 |\n| --- | --- |\n| 成立 | 2020年 |\n')
+        self.output = os.path.join(self.work.name, 'out.docx')
+
+    def tearDown(self):
+        self.work.cleanup()
+
+    def test_tries_site_styles_in_order_then_uses_first_that_downloads(self):
+        def fake_download(file_id, directory):
+            if file_id == 'missing':
+                raise ValueError('本地无实体文件')
+            return self.TEMPLATE, '某某投资建议书.docx'
+        with mock.patch.object(proxy, 'download_style', side_effect=fake_download):
+            result, is_error = call('qtou_report_word', markdownPath=self.markdown, outputPath=self.output,
+                                    company='测试科技有限公司', title='投资建议书', styleFileIds=['missing', 'good'])
+        self.assertFalse(is_error, result)
+        self.assertEqual(result['style'], {'source': 'site', 'fileId': 'good', 'fileName': '某某投资建议书.docx'})
+        self.assertEqual(result['stylesSkipped'][0]['fileId'], 'missing')
+        self.assertTrue(zipfile.is_zipfile(self.output))
+        with zipfile.ZipFile(self.output) as docx:
+            self.assertIn('<w:tbl>', docx.read('word/document.xml').decode('utf-8'))
+
+    def test_falls_back_to_plugin_template_when_no_style_downloads(self):
+        with mock.patch.object(proxy, 'download_style', side_effect=ValueError('x')):
+            result, is_error = call('qtou_report_word', markdownPath=self.markdown, outputPath=self.output,
+                                    company='测试科技有限公司', styleFileIds=['a'])
+        self.assertFalse(is_error, result)
+        self.assertEqual(result['style'], {'source': 'plugin-template'})
+
+    def test_relative_paths_are_rejected(self):
+        result, is_error = call('qtou_report_word', markdownPath='r.md', outputPath=self.output, company='测试')
+        self.assertTrue(is_error)
+        self.assertEqual(result['error']['code'], 'INVALID_ARGUMENT')
+
+    def test_download_url_must_point_at_qtou(self):
+        with mock.patch.object(proxy, 'call_upstream_tool', return_value={'url': 'http://evil.example/x', 'headers': {}}):
+            with self.assertRaises(ValueError):
+                proxy.download_style('f1', self.work.name)
+
+
 class UnauthenticatedStdioDiscoveryTests(unittest.TestCase):
     """Spawn the real stdio proxy with a blank HOME and no login env."""
 
     LOCAL_NAMES = {
-        'qtou_account_list', 'qtou_account_add', 'qtou_account_switch', 'qtou_account_logout',
+        'qtou_account_list', 'qtou_account_add', 'qtou_account_switch', 'qtou_account_logout', 'qtou_report_word',
     }
 
     def test_tools_list_without_token_returns_local_tools_and_not_32001(self):

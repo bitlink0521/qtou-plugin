@@ -14,7 +14,7 @@ import qtou_shared  # noqa: E402
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROXY = os.path.join(ROOT, 'tools', 'qtou_mcp_proxy.py')
 SNAPSHOT = os.path.join(ROOT, 'tools', 'qtou_tools_snapshot.json')
-LOCAL = {'qtou_account_list', 'qtou_account_add', 'qtou_account_switch', 'qtou_account_logout'}
+LOCAL = {'qtou_account_list', 'qtou_account_add', 'qtou_account_switch', 'qtou_account_logout', 'qtou_report_word'}
 
 
 def main():
