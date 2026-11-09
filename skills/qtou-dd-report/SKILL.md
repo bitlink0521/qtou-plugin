@@ -20,7 +20,7 @@ description: >-
    - 返回 `FAILED_PRECONDITION`（无实体文件）、跨租户或无权限：记为「未读」及原因，其余照常，不绕道读文件。
 3. **定写法和版式**（先读 [DD-REPORT-WRITING.md](DD-REPORT-WRITING.md) 第 0 节）：
    ① 不带 `projectId` 搜「尽调报告 / 投资建议书 / 尽职调查 / 投资分析报告」等，挑 1–3 份最完整的读全文，学结构和用词，以它为准；
-   ② 版式：这些范本里有 `.docx` 的，调 `agent_documents_download_url({ fileId })`，按返回的 `howTo` 用 curl 带请求头下载到本地，作为第 6 步的 `--style`（返回「本地无实体文件」就换下一份）；一份都下不到就不传 `--style`，直接用插件自带模板，**不停下来问用户**；
+   ② 版式：把这些范本里 `.docx` 的 fileId 按优先顺序记下，第 6 步交给 `qtou_report_word` 的 `styleFileIds`，由它下载并沿用版式（下不到的自动换下一份，都下不到用插件自带模板），**不停下来问用户**，也不用自己下载；
    ③ 站内找不到可读的范本，写法用 DD-REPORT-WRITING.md 第 1–11 节兜底，同样不停下来问。用户事先给了模板或范本时以用户的为准。
    范本只学写法和版式，不搬它的公司事实和数字。
 4. **写报告**：按 Markdown 写到本地文件（`#` 一级、`##` 二级、`###` 三级标题，表格用 `|` 表格，表题单独一行写「表n：名称」，金额表上方单独一行写「单位：万元」）。事实和数字只用第 2 步读回的本项目材料。
@@ -28,7 +28,10 @@ description: >-
    - 正文不加引文、脚注、来源表、「编制说明」等证明或免责文字。
    - 另存工作底稿：每个事实或数字 → 文档名、fileId、原文逐字摘录、自算数的算式，只供自检，不放进报告。
 5. **自检**：按 DD-REPORT-WRITING.md 第 12 节逐条核对，每个数字都能在材料原文找到或由其算出，不过就改到过为止，不交半成品。
-6. **生成 Word**：`python3 <插件根目录>/tools/dd_report_docx.py <报告.md> -o <公司简称>-尽调报告初稿-<YYYYMMDD>.docx --company '<公司全称>' --title '尽职调查报告'（或「投资建议书」） [--org '<管理人全称>'] [--style <第 3 步下载的范本.docx>]`。脚本沿用样式来源的字体、标题编号、页面和页眉页脚，自动加封面和目录。打开生成的文件确认能读，标题层级和表格没有错乱。
+6. **生成 Word**：调 `qtou_report_word({ markdownPath, outputPath, company, title, org?, styleFileIds })`，路径都写本机绝对路径（`outputPath` 如 `<当前工作目录>/<公司简称>-投资建议书初稿-<YYYYMMDD>.docx`），`title` 写「尽职调查报告」或「投资建议书」，用户给了本机模板就传 `stylePath`。它沿用范本的字体、标题编号、页面和页眉页脚，自动加封面和目录，Markdown 表格转成 Word 表格。
+   - **Word 只用这个工具生成**：不用 MiniMax 等其他 Word / docx 技能，也不自己写脚本拼 docx。别的工具不会沿用站内范本版式，也不认这里的标题、表题和单位写法。
+   - 返回的 `style` 说明版式来源（`site` 带范本文档名和 fileId，`plugin-template` 是插件模板），`stylesSkipped` 列出没下到的范本及原因，交付时照实说明。
+   - 工具不可用（客户端没加载插件本地工具）时，才退回 `python3 <插件根目录>/tools/dd_report_docx.py <报告.md> -o <输出.docx> --company '<公司全称>' --title '<报告名称>'`，不带范本版式。
 
 ## 交付
 

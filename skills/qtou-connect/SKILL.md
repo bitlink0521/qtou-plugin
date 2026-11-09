@@ -46,7 +46,7 @@ description: >-
 
 ## 只走 MCP 工具（强制）
 
-业务操作只能调已连接的 qtou 工具：不自己读取 key，不用 curl / 脚本 / fetch 调 `/api/v1/agent/**`，不直连数据库，不读服务器本地文件。连不上或缺工具时如实报错并停止；客户端缓存了旧工具列表时先重连再查。例外只有两个：`agent_projects_bp_upload_url` 返回的一次性上传地址（见 `qtou-bp-intake`），`agent_documents_download_url` 返回的限时下载地址（见 `qtou-dd-report`）。
+业务操作只能调已连接的 qtou 工具：不自己读取 key，不用 curl / 脚本 / fetch 调 `/api/v1/agent/**`，不直连数据库，不读服务器本地文件。连不上或缺工具时如实报错并停止；客户端缓存了旧工具列表时先重连再查。例外只有一个：`agent_projects_bp_upload_url` 返回的一次性上传地址（见 `qtou-bp-intake`）。站内范本 Word 由插件本地工具 `qtou_report_word` 下载，不自己 curl。
 
 ## 工具
 
@@ -54,7 +54,7 @@ description: >-
 |---|---|
 | 通用 | `agent_health` · `agent_dicts` |
 | BP 入池 | `agent_bp_parse` · `agent_projects_create_pending` · `agent_projects_get` · `agent_projects_company_choose` · `agent_projects_confirm` · `agent_projects_reject` · `agent_projects_user_fields` · `agent_projects_bp_schema` · `agent_projects_bp_get` · `agent_projects_bp_source` · `agent_projects_bp_fill` · `agent_projects_bp_upload_url` · `agent_projects_bp_attach` · `agent_projects_bp_pages` · `agent_projects_bp_assets` · `agent_projects_web_logo` · `agent_projects_profile_get` · `agent_projects_profile_fill` |
-| 尽调报告 | `agent_documents_search` · `agent_documents_content` · `agent_documents_pages` · `agent_documents_download_url` |
+| 尽调报告 | `agent_documents_search` · `agent_documents_content` · `agent_documents_pages` · `qtou_report_word`（生成 Word，内部用 `agent_documents_download_url` 取范本） |
 | 投后预警 | `agent_portfolio_list` · `agent_portfolio_quarterly` · `agent_risk_threshold_get` · `agent_risk_alerts_list` · `agent_risk_alerts_create` |
 
 写操作都要用户确认：入池要过确认卡（见 `qtou-bp-intake`），预警逐条确认（见 `qtou-risk-alert`）。用户确认入池后的补空值写入按 `qtou-bp-intake` 自动执行，不再逐项确认。
