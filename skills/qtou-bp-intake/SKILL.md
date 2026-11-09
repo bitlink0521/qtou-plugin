@@ -6,7 +6,10 @@ description: >-
 ---
 # 轻投：BP 入池
 
-先按 `qtou-connect` 技能连上轻投。业务操作只走 qtou MCP 工具，参数传 JSON 对象（数组传数组、`confirmed` 传布尔），每个写入工具对同一项目一次传对、只调一次。返回 `isError` 时：`INVALID_ARGUMENT` 的 message 会说明哪里不对，按它改好参数后重调同一个工具，不要因此停下整个流程；其他错误把 code 和 message 如实转告，不换路径绕过。
+先按 `qtou-connect` 技能连上轻投。业务操作只走 qtou MCP 工具，参数传 JSON 对象（数组传数组、`confirmed` 传布尔），每个写入工具对同一项目一次传对、只调一次。返回 `isError` 时：
+- `INVALID_ARGUMENT`：message 说明哪里不对，按它改好参数后重调同一个工具，不要因此停下整个流程。
+- `FAILED_PRECONDITION` 且 message 说了下一步（如「请先确认入池」「先上传」「带 companyFallback 重试」「用这个 pendingId 续办」）：照做后接着走流程，这是顺序没走对，不是故障。例如还没确认入池就调了补全工具，就回到第 4 步弹确认卡。
+- `BACKEND_DB_ERROR`、`INTERNAL_ERROR`、`UPSTREAM_*`、权限错误：把 code、message 和 `ref=…` 如实转告并停下，不换路径绕过。
 
 **入池成功不是终点。** 用户哪怕只说一句「入库」「入池轻投」，也要按下面 10 步全部做完，第 10 步的完成标准全部满足才算完成，不能挑几步做完就交差。工具返回的 `todo` 列出的都是还没做完的事，逐条处理掉。参考文件到哪一步再读，一次只读一个，不要一次性打印多份文件或整份字段目录（会被截断）。
 
