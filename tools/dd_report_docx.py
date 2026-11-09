@@ -3,7 +3,8 @@
 
 The reference is a report already on the qtou site (downloaded via agent_documents_download_url) or, when there is
 none, the template shipped with the plugin. Its styles, page setup, headers/footers and section layout are kept; its
-body is replaced by the draft. Standard library only.
+body is replaced by the draft. Text that belongs to the reference's own company (header/footer wording, notes, comments,
+document properties) is removed so it cannot leak into the new report. Standard library only.
 
     python3 dd_report_docx.py draft.md -o 尽调报告.docx --company 公司全称 --title 尽职调查报告 \
         [--org 管理人全称] [--date 2026年11月] [--style reference.docx]
@@ -196,6 +197,69 @@ def cover_xml(args):
     return ''.join(parts)
 
 
+PAGINATION_TEXT = re.compile(r'^[\s第页共/／\-—－|｜·.PpageofOF]*$')
+RUN_OR_FIELD = re.compile(r'<w:fldSimple\b.*?</w:fldSimple>|<w:r\b(?:(?!<w:r\b).)*?</w:r>', re.S)
+
+
+def scrub_header_footer(xml, replacement, rpr_holder):
+    """Drop the reference's own wording; keep page fields, drawings and pagination words (第 页 共 页)."""
+    depth, removed, out, last = 0, False, [], 0
+    for match in RUN_OR_FIELD.finditer(xml):
+        chunk = match.group(0)
+        out.append(xml[last:match.start()])
+        last = match.end()
+        if chunk.startswith('<w:fldSimple'):
+            out.append(chunk)
+            continue
+        if 'w:fldCharType="begin"' in chunk:
+            depth += 1
+        in_field = depth > 0
+        if 'w:fldCharType="end"' in chunk:
+            depth = max(0, depth - 1)
+        text = ''.join(re.findall(r'<w:t\b[^>]*>([^<]*)</w:t>', chunk))
+        if in_field or not text or PAGINATION_TEXT.match(text):
+            out.append(chunk)
+            continue
+        if not removed:
+            props = re.search(r'<w:rPr>.*?</w:rPr>', chunk, re.S)
+            rpr_holder.append(props.group(0) if props else '')
+            out.append('<w:r>%s<w:t xml:space="preserve">%s</w:t></w:r>' % (rpr_holder[-1], escape(replacement)) if replacement else '')
+        removed = True
+    out.append(xml[last:])
+    return re.sub(r'(<v:textpath\b[^>]*\bstring=")[^"]*(")', r'\1\2', ''.join(out))
+
+
+def scrub_reference(files, args):
+    header_text = '%s　%s' % (args.title, args.company)
+    for name in list(files):
+        if re.match(r'word/(header|footer)\d*\.xml$', name):
+            files[name] = scrub_header_footer(files[name].decode('utf-8'), header_text if 'header' in name else '', []).encode('utf-8')
+        elif name in ('word/footnotes.xml', 'word/endnotes.xml'):
+            xml = files[name].decode('utf-8')
+            xml = re.sub(r'<w:(footnote|endnote)\b(?![^>]*w:type=)[^>]*>.*?</w:\1>', '', xml, flags=re.S)
+            files[name] = xml.encode('utf-8')
+        elif re.match(r'word/comments\w*\.xml$', name) or name.startswith('word/people'):
+            files.pop(name)
+    for rels_name in [n for n in files if n.endswith('.rels')]:
+        rels = files[rels_name].decode('utf-8')
+        rels = re.sub(r'<Relationship\b[^>]*Target="(?:comments\w*|people)\.xml"[^>]*/>', '', rels)
+        files[rels_name] = rels.encode('utf-8')
+    if '[Content_Types].xml' in files:
+        types = files['[Content_Types].xml'].decode('utf-8')
+        types = re.sub(r'<Override\b[^>]*PartName="/word/(?:comments\w*|people)\.xml"[^>]*/>', '', types)
+        files['[Content_Types].xml'] = types.encode('utf-8')
+    if 'docProps/core.xml' in files:
+        core = files['docProps/core.xml'].decode('utf-8')
+        for tag in ('dc:subject', 'dc:creator', 'cp:keywords', 'dc:description', 'cp:lastModifiedBy', 'cp:category'):
+            core = re.sub(r'<%s\b[^>]*>.*?</%s>' % (tag, tag), '<%s></%s>' % (tag, tag), core, flags=re.S)
+        core = re.sub(r'<dc:title\b[^>]*>.*?</dc:title>', '<dc:title>%s</dc:title>' % escape(args.company + args.title), core, flags=re.S)
+        files['docProps/core.xml'] = core.encode('utf-8')
+    if 'docProps/app.xml' in files:
+        app = files['docProps/app.xml'].decode('utf-8')
+        app = re.sub(r'<(Manager|HyperlinkBase)>.*?</\1>', r'<\1></\1>', app, flags=re.S)
+        files['docProps/app.xml'] = app.encode('utf-8')
+
+
 def toc_xml(picked):
     field = ('<w:p><w:r><w:fldChar w:fldCharType="begin" w:dirty="true"/></w:r><w:r><w:instrText xml:space="preserve">'
              ' TOC \\o "1-3" \\h \\z \\u </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r>'
@@ -206,6 +270,7 @@ def toc_xml(picked):
 def build(args):
     with zipfile.ZipFile(args.style) as source:
         files = {name: source.read(name) for name in source.namelist()}
+    scrub_reference(files, args)
     document = files['word/document.xml'].decode('utf-8')
     styles = read_styles(files['word/styles.xml'].decode('utf-8'))
     picked = pick_styles(styles, document)
