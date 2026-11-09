@@ -17,7 +17,7 @@ description: >-
 
 1. **读 BP**：逐页提取原文，记下页码；扫描页、图片页先记下，等第 7 步看图。
 2. **提取证据**：读 [FIELDS.md](FIELDS.md)，按字段表、证据格式和「值怎么写」生成 `bpEvidence`，包括 `fields`、**核心团队 `team`（BP 里有几个人就写几个人；团队页常是图片，要看图提取）**、历史融资 `financing`。`team` 为空会被拒，BP 确实没有团队信息才传 `teamAbsentReason` 说明。字典字段只查对应字段的选项。
-3. **建待确认**：`agent_projects_create_pending({ projectName, companyName, text, bpEvidence })`，`companyName` 用法定全称。`text` 只写几行简短标签，如「项目名称：…」「公司名称：…」「轮次：…」「行业：…」「来源：BP 文件名」，每行的值几个词即可（来源、轮次、城市限 64 字），详细内容都放进 `bpEvidence`。记下 `pendingId`、`evidenceId`、`confirmToken`。返回 `bpEvidenceDropped` 里列出的条目是引文对不上、被服务端摘掉的，其余已存下：记下这几条，第 5 步照 `reason` 改好后补。**不要因为报错把 `bpEvidence` 整个去掉重提**，那样确认后字段和团队都不会补。
+3. **建待确认**：`agent_projects_create_pending({ projectName, companyName, text, bpEvidence })`，`companyName` 用法定全称。BP 只写了品牌或简称时自己查出全称，不要先问用户：至少搜三次（品牌 + 创始人姓名、官网域名 + 公司、品牌 + 主营产品），看官网页脚 / ICP 备案、天眼查 / 企查查 / 爱企查、招聘站和创投媒体；有两处以上独立来源给出同一全称、且创始人或产品对得上，就用它，并在汇报里写明依据。查完仍有多个候选或一个都没有，才把候选和依据列给用户选。`text` 只写几行简短标签，如「项目名称：…」「公司名称：…」「轮次：…」「行业：…」「来源：BP 文件名」，每行的值几个词即可（来源、轮次、城市限 64 字），详细内容都放进 `bpEvidence`。记下 `pendingId`、`evidenceId`、`confirmToken`。返回 `bpEvidenceDropped` 里列出的条目是引文对不上、被服务端摘掉的，其余已存下：记下这几条，第 5 步照 `reason` 改好后补。**不要因为报错把 `bpEvidence` 整个去掉重提**，那样确认后字段和团队都不会补。
 4. **确认入池**：
    - `companyMatch.choiceRequired: true`（已有同名公司）：给用户两个选项「关联已有公司」「取消后改名」，用户选定后调 `agent_projects_company_choose({ pendingId, choice, companyId, confirmed: true })`。
    - 展示摘要（项目名、公司、轮次、团队人数、缺口）后调 `agent_projects_confirm({ pendingId, confirmToken })`。Codex 等支持表单的客户端会弹确认卡让用户点「接受 / 拒绝」，不要再让用户打字；不支持表单的客户端用文字确认卡，用户明确回复「确认入池」才调。返回 `USER_DECLINED` 视为取消，不重试。
