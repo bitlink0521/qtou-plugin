@@ -32,12 +32,14 @@ description: >-
 6. **上传 BP 原文件**：转成 PDF（≤20MB，超限去掉内嵌视频或压缩图片），算 SHA256，调 `agent_projects_bp_upload_url({ pendingId, fileName, sha256, sizeBytes })`，按返回的地址 PUT 文件，请求头带返回 `headers` 里的 `X-Qtou-Upload-Sig`；再调 `agent_projects_bp_attach({ pendingId, uploadId, confirmed })`，记下 `fileId`。不能用本地路径代替上传。
 7. **图片和扫描页**：读 [VISUALS.md](VISUALS.md)，逐页看图、补图里的文字、裁 Logo / 团队头像 / 证据图。`bp_fill` 和确认返回里的 `todo` 列出还缺的项（团队为空、Logo 占位、哪些成员是占位头像），全部处理完才算这一步完成。
 8. **工商和档案字段**：读 [ENRICHMENT.md](ENRICHMENT.md)，用 `workflow.py` 联网检索、核实、补写工商与公司档案空字段。
+   **历史融资**：回读 `agent_projects_bp_get` 的 `collections.financing` 和确认返回的 `externalProject`。企名片没带来融资轮次、BP 也没写全时，联网搜「品牌 / 公司全称 + 融资」（36氪、投资界、动脉网、IT桔子、公司官网新闻、正式公告），打开报道取原文，每轮调 `agent_projects_financing_add({ pendingId, rounds: [{ round, date, money, investors, sourceTitle, sourceUrl, quote }] })` 先预览、再 `confirmed: true` 写入。`quote` 是报道里含公司名或品牌、轮次或金额的原句；只到年份、对不上主体的不写。
 9. **回读**：`agent_projects_bp_get({ pendingId })` 和 `agent_projects_profile_get({ pendingId })`。
 10. **完成标准（全部满足才结束）**：
     - 团队人数 = BP 里的核心成员人数，每人有职务和履历；BP 有照片的成员，头像是从 BP 裁的真照片（`isAutoGenerate` 为 `"0"` 的是姓名占位图，不算）。
     - BP 里有内容的字段都已写入，或列在缺口里并写明原因。
     - BP 附件有 `fileId`。
     - 工商与档案字段已走完第 8 步，剩余空字段都有原因。
+    - 融资页签有公开可查的历史融资；查过没有的，写明查了哪些来源。
     - 有一项不满足，就回到对应步骤补做；确实做不了的写进汇报的「未完成」。
 
 ## 底线（不满足的值不写）
