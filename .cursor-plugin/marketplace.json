@@ -12,7 +12,7 @@
       "name": "qtou",
       "source": "./",
       "description": "连接轻投：BP 入池、尽调检索、投后风险预警三场景，首次使用登录、支持多账号。",
-      "version": "0.4.3",
+      "version": "0.4.4",
       "category": "productivity",
       "homepage": "https://qtou.cn"
     }
