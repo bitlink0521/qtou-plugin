@@ -1290,6 +1290,31 @@
   }
  },
  {
+  "name": "agent_files_convert_url",
+  "description": "BP 或材料是 PPT/PPTX/DOC/DOCX 时在服务端转成 PDF（客户端不用装 Office）：返回一次性上传地址（10 分钟有效），PUT 原文件后响应里的 pdfUrl 即转好的 PDF（30 分钟有效），下载到本地后按 PDF 继续",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "fileName": {
+     "type": "string",
+     "description": "原文件名，.ppt/.pptx/.doc/.docx"
+    },
+    "sha256": {
+     "type": "string",
+     "description": "原文件 sha256（shasum -a 256）"
+    },
+    "size": {
+     "type": "integer",
+     "description": "字节数，可选"
+    }
+   },
+   "required": [
+    "fileName",
+    "sha256"
+   ]
+  }
+ },
+ {
   "name": "agent_report_word",
   "description": "场景②：把写好的尽调报告 / 投资建议书（Markdown）在服务端生成 Word：按 styleFileIds 顺序沿用站内同类报告的版式（字体、标题编号、页面、页眉页脚），都取不到用内置模板；自动加封面和目录，表格转成 Word 表格。返回 url 是用户在浏览器里直接点的下载链接（30 分钟有效），用可点击链接交给用户；尽调报告的 Word 只用本工具生成",
   "inputSchema": {
@@ -1945,7 +1970,7 @@
      "type": "array",
      "description": "[{projectId,query,source,hits,status,error}]",
      "items": {
-      "$ref": "$.result.tools[29].inputSchema.properties.sources.items"
+      "$ref": "$.result.tools[30].inputSchema.properties.sources.items"
      }
     },
     "runId": {
