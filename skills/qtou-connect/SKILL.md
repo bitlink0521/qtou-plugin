@@ -8,6 +8,11 @@ description: >-
 
 ## 连接
 
+**Codex（直连，浏览器登录）**：Codex 里的轻投插件直接连 `https://qtou.handsels.com/api/v1/agent/mcp`，不需要 Python，也没有 `qtou_account_*` 工具。第一次使用时 Codex 会自动弹出轻投登录页，用户在浏览器里登录即可，登录后页面自动关闭。
+- 对话里没有任何轻投工具：请用户在 Codex 的插件 / MCP 设置里找到「轻投」点登录（Authenticate），用命令行的可运行 `codex mcp login qtou`；登录后新开一个对话。
+- 换账号：在设置里退出轻投登录（命令行 `codex mcp logout qtou`），再登录另一个账号。
+- 下面「宿主 bot」和代理的流程不适用于 Codex。
+
 **默认登录（宿主 bot，如 Grok Bot / 轻投专家）**：未登录 / 401 / 第一次安装，**直接由宿主发起安全登录**采集轻投用户名与密码。不要先调空的 `qtou_account_add` 去赌 MCP elicitation。elicitation 若被取消、报 `-32001`，或用户说「没看到 / 看不到表单」，立刻改为宿主安全登录，不要再试 elicitation。插件自己弹不出宿主的安全采集控件；未登录时工具可能返回 JSON-RPC `-32001`，`error.data` 为 `AUTH_REQUIRED`（`action=HostSecureLogin`，含代签地址、字段，以及 `secretRequest=QTOU_LOGIN_PASSWORD`），宿主应按此发起安全登录。
 
 注意：仅弹出网页类安全表单（例如只能把密文交给浏览器填充的 RequestUserForm）**不等于**已经把密码交给了本插件。RequestUserForm 可以和下面的 secret-request **并存**，但不能代替交密通路。密码不得进聊天、不得打印。若使用 RequestUserForm，`site` 必须是域名 `qtou.cn`（禁止 IP、`localhost`、`127.0.0.1`、`agent.bitilinks.cn`）；代签 POST 地址（演示环境）**不是**表单 site，二者不要混用，也不允许用工具参数覆盖站点和 URL。
@@ -17,10 +22,10 @@ description: >-
 1. 已连且冒烟（`agent_health`）通则结束。
 2. 未登录：**先问用户名，再收密码**。先在聊天里问轻投用户名（用户名不是密钥，可以明文回答）；用户回答后，宿主再发 `secret-request` 掩码框，把密码写入环境变量 `QTOU_LOGIN_PASSWORD`，填完直接进入第 3 步登录，不要再回头问用户名。**每个 bot 必须使用自己发起的 secret-request**，不能沿用其他 bot 写入的变量。secret-request 写入的是发起该请求的那个 bot 的 `process.env`；stdio 代理在启动时才能读到这些变量，所以填写后若代理是早就拉起的，需要重装/重连该 MCP 后再调用登录工具。
 3. 再调用 `qtou_account_add`（可以只传 `username`，或不传 password）。代理取凭据的优先级是：工具参数 > 环境变量 `QTOU_LOGIN_PASSWORD` / `QTOU_LOGIN_USERNAME` > Codex elicitation。三者都没有则返回 `AUTH_REQUIRED`，并提示宿主用 secret-request（变量名 `QTOU_LOGIN_PASSWORD`）。
-4. 代理把账密 POST 到写死的代签 URL `http://82.157.40.213:8133/api/v1/agent/auth/login`（站点和 URL 不允许覆盖），只把返回的 key 写入本机 `~/.qtou/`，不写密码。登录成功后**不清除**环境变量。密码不进日志、不进报错、不进返回值。若连接器是 HTTP，也可由宿主把账密 POST 到代签地址，将返回的 `agentKey` 写入插件变量 `QTOU_CONNECTOR_TOKEN`（key 永不进聊天）。然后 `agent_health` 冒烟。登录、切换或退出账号后代理会发 `notifications/tools/list_changed`，宿主应重新拉取工具列表；若登录后仍只有 `qtou_account_*` 四个工具，重连该 MCP 后再继续，不要因此判定入池不可用。
+4. 代理把账密 POST 到写死的代签 URL `https://qtou.handsels.com/api/v1/agent/auth/login`（站点和 URL 不允许覆盖），只把返回的 key 写入本机 `~/.qtou/`，不写密码。登录成功后**不清除**环境变量。密码不进日志、不进报错、不进返回值。若连接器是 HTTP，也可由宿主把账密 POST 到代签地址，将返回的 `agentKey` 写入插件变量 `QTOU_CONNECTOR_TOKEN`（key 永不进聊天）。然后 `agent_health` 冒烟。登录、切换或退出账号后代理会发 `notifications/tools/list_changed`，宿主应重新拉取工具列表；若登录后仍只有 `qtou_account_*` 四个工具，重连该 MCP 后再继续，不要因此判定入池不可用。
 5. Codex / WorkBuddy / Grok 命令行补充路径：插件的 `qtou` 连接由 `tools/qtou_mcp_proxy.py` 启动。没有可用账号、没有环境变量、也没有传入参数时，它仍可请客户端弹出 MCP 表单（不支持表单的客户端改用 macOS 对话框），签发后保存在本机 `~/.qtou/`，之后自动复用。表单内容只回给启动器，不进聊天。这不是宿主 bot 的默认路径。若返回 `AUTH_REQUIRED` / `-32001`，改由宿主发 secret-request，不要循环空参 `qtou_account_add`。
 
-代签登录 URL（演示环境，写死，供代理/宿主 POST）：`http://82.157.40.213:8133/api/v1/agent/auth/login`。禁止写成 `agent.bitilinks.cn`（工场）或 `localhost` / `127.0.0.1`，也不允许用 `qtou_account_add` 的参数覆盖。
+代签登录 URL（演示环境，写死，供代理/宿主 POST）：`https://qtou.handsels.com/api/v1/agent/auth/login`。禁止写成 `agent.bitilinks.cn`（工场）或 `localhost` / `127.0.0.1`，也不允许用 `qtou_account_add` 的参数覆盖。
 
 ## 多账号（插件启动器提供的本地工具）
 
@@ -35,18 +40,19 @@ description: >-
 
 | 项 | 值 |
 | --- | --- |
-| MCP URL | `http://82.157.40.213:8133/api/v1/agent/mcp`（可用环境变量 `QTOU_MCP_URL` 覆盖；默认即此地址。禁止写成 `agent.bitilinks.cn` 或 `localhost` / `127.0.0.1`） |
-| 代签登录 URL（演示环境，写死） | `http://82.157.40.213:8133/api/v1/agent/auth/login`（可用 `QTOU_LOGIN_URL` 覆盖代理自己的 POST 目标；禁止写成工场或 localhost） |
+| MCP URL（Codex，HTTPS + 浏览器登录） | `https://qtou.handsels.com/api/v1/agent/mcp` |
+| MCP URL（代理 / 宿主 bot） | `https://qtou.handsels.com/api/v1/agent/mcp`（可用环境变量 `QTOU_MCP_URL` 覆盖；默认即此地址。禁止写成 `agent.bitilinks.cn` 或 `localhost` / `127.0.0.1`） |
+| 代签登录 URL（演示环境，写死） | `https://qtou.handsels.com/api/v1/agent/auth/login`（可用 `QTOU_LOGIN_URL` 覆盖代理自己的 POST 目标；禁止写成工场或 localhost） |
 | 传输 | Streamable HTTP |
 | 鉴权 | `Authorization: Bearer <agent_key>` |
 | 连接器名 | `qtou`（Grok 上手工添加的可能叫 `轻投`，二者等价） |
 | 插件变量 | `QTOU_CONNECTOR_TOKEN` |
 
-签发：宿主用 secret-request（可与 RequestUserForm 并存）采集账密（不收 PAT，不在聊天里要明文密码）→ 调用 `qtou_account_add`（读参数或环境变量 `QTOU_LOGIN_PASSWORD` / 可选 `QTOU_LOGIN_USERNAME`）或代调 `POST http://82.157.40.213:8133/api/v1/agent/auth/login` → 得窄 scope `agentKey` → 由插件写入本机或写入 `QTOU_CONNECTOR_TOKEN`。登录成功后不清除环境变量。审计不写密码明文；key 永不进聊天。
+签发：宿主用 secret-request（可与 RequestUserForm 并存）采集账密（不收 PAT，不在聊天里要明文密码）→ 调用 `qtou_account_add`（读参数或环境变量 `QTOU_LOGIN_PASSWORD` / 可选 `QTOU_LOGIN_USERNAME`）或代调 `POST https://qtou.handsels.com/api/v1/agent/auth/login` → 得窄 scope `agentKey` → 由插件写入本机或写入 `QTOU_CONNECTOR_TOKEN`。登录成功后不清除环境变量。审计不写密码明文；key 永不进聊天。
 
 ## 只走 MCP 工具（强制）
 
-业务操作只能调已连接的 qtou 工具：不自己读取 key，不用 curl / 脚本 / fetch 调 `/api/v1/agent/**`，不直连数据库，不读服务器本地文件。连不上或缺工具时如实报错并停止；客户端缓存了旧工具列表时先重连再查。例外只有一个：`agent_projects_bp_upload_url` 返回的一次性上传地址（见 `qtou-bp-intake`）。站内范本 Word 由插件本地工具 `qtou_report_word` 下载，不自己 curl。
+业务操作只能调已连接的 qtou 工具：不自己读取 key，不用 curl / 脚本 / fetch 调 `/api/v1/agent/**`，不直连数据库，不读服务器本地文件。连不上或缺工具时如实报错并停止；客户端缓存了旧工具列表时先重连再查。例外只有一个：`agent_projects_bp_upload_url` 返回的一次性上传地址（见 `qtou-bp-intake`）。尽调报告的 Word 由服务端工具 `agent_report_word` 生成，返回的下载链接交给用户在浏览器里点，不自己下载。
 
 ## 工具
 
@@ -54,15 +60,16 @@ description: >-
 |---|---|
 | 通用 | `agent_health` · `agent_dicts` |
 | BP 入池 | `agent_bp_parse` · `agent_projects_create_pending` · `agent_projects_find` · `agent_projects_financing_add` · `agent_projects_get` · `agent_projects_company_choose` · `agent_projects_confirm` · `agent_projects_reject` · `agent_projects_user_fields` · `agent_projects_bp_schema` · `agent_projects_bp_get` · `agent_projects_bp_source` · `agent_projects_bp_fill` · `agent_projects_bp_upload_url` · `agent_projects_bp_attach` · `agent_projects_bp_pages` · `agent_projects_bp_assets` · `agent_projects_web_logo` · `agent_projects_profile_get` · `agent_projects_profile_fill` |
-| 尽调报告 | `agent_documents_search` · `agent_documents_content` · `agent_documents_pages` · `qtou_report_word`（生成 Word，内部用 `agent_documents_download_url` 取范本） |
+| 尽调报告 | `agent_documents_search` · `agent_documents_content` · `agent_documents_pages` · `agent_report_word`（服务端按站内范本生成 Word，返回下载链接） |
 | 投后预警 | `agent_portfolio_list` · `agent_portfolio_quarterly` · `agent_risk_threshold_get` · `agent_risk_alerts_list` · `agent_risk_alerts_create` |
 
-写操作都要用户确认：入池要过确认卡（见 `qtou-bp-intake`），预警逐条确认（见 `qtou-risk-alert`）。用户确认入池后的补空值写入按 `qtou-bp-intake` 自动执行，不再逐项确认。
+写操作都要用户确认：入池前在对话里给出确认卡、等用户回复「确认入池」（见 `qtou-bp-intake`），预警逐条在对话里确认（见 `qtou-risk-alert`）。客户端调用工具时若再弹「是否允许」，那是客户端自己的确认，照常让用户点。用户确认入池后的补空值写入按 `qtou-bp-intake` 自动执行，不再逐项确认。
 
 ## 返回与错误
 
 - 列表类工具（`agent_documents_search`、`agent_portfolio_list`、`agent_risk_alerts_list`、`agent_dicts`）返回 `{ items: [...] }`。`agent_portfolio_list`、`agent_risk_alerts_list`、`agent_documents_search` 分页：传 `page`（从 1 起）和 `pageSize`（1–50，默认 20），返回 `total`、`hasMore`；要全量时 `hasMore: true` 就继续翻。
 - 失败返回 `isError: true`，正文 `{"error": {"code", "message", "tool"}}`。code 有 `INVALID_ARGUMENT`、`NOT_FOUND`、`FAILED_PRECONDITION`、`BACKEND_DB_ERROR`、`INTERNAL_ERROR`、`UPSTREAM_*`。把 code 和 message 如实告诉用户，带 `ref=…` 的一并给出（管理员凭它查日志）；不改走别的路径，也不写成「没找到」。
+- 工具调用没拿到返回、报网络或传输错误（如 `error sending request`、连接被断开、超时）：多是长时间空闲后连接被网络断开，不是轻投的业务错误，原样重试同一调用（间隔几秒，最多 2 次）。写入类工具重试前先用对应的读取工具看一眼是否已经写进去，写进去了就不再重试。重试仍失败再如实告诉用户并停下。
 - 参数传 JSON 对象：对象传对象、数组传数组、数字传数字、`confirmed` 传布尔。`arguments` 被序列化成字符串会返回「参数 arguments 格式不对，应为对象」，改成对象重发即可。
 
 ## 不做

@@ -305,7 +305,8 @@ def ask_credentials(hint, use_terminal):
 def sign_key(username, password):
     body = urllib.parse.urlencode({'username': username, 'password': password, 'client': 'qtou-mcp-proxy'}).encode()
     try:
-        with urllib.request.urlopen(urllib.request.Request(LOGIN_URL, data=body, method='POST'), timeout=20) as response:
+        with urllib.request.urlopen(urllib.request.Request(LOGIN_URL, data=body, method='POST', headers={'User-Agent': USER_AGENT}),
+                                    timeout=20) as response:
             data = json.load(response)
     except urllib.error.HTTPError as error:
         try:
@@ -346,7 +347,7 @@ def revoke_key(key, key_id):
     if not key_id:
         return False
     request = urllib.request.Request(API_BASE + '/tokens/' + urllib.parse.quote(key_id), method='DELETE',
-                                     headers={'Authorization': 'Bearer ' + key})
+                                     headers={'Authorization': 'Bearer ' + key, 'User-Agent': USER_AGENT})
     try:
         with urllib.request.urlopen(request, timeout=20) as response:
             return response.status == 200

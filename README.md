@@ -8,11 +8,11 @@
 
 插件 = **MCP（轻投工具）+ 技能（使用规则）**。只接 MCP 也能调工具，但没有技能时 AI 不知道「入池先出确认卡」「预警必须带出处」这些规矩，所以两样都要装。
 
-默认连接演示环境 `http://82.157.40.213:8133/api/v1/agent/mcp`（2026-11-09 起演示环境从 74 迁到公司内网服务器，经 NPS 映射到这个公网地址）。
+默认连接演示环境 `https://qtou.handsels.com/api/v1/agent/mcp`（演示环境在公司内网服务器上，经 Cloudflare Tunnel 提供 HTTPS 访问，网页系统是 https://qtou.handsels.com/qtou）。
 
 ## 登录
 
-默认代签登录地址（轻投演示环境，写死）：`http://82.157.40.213:8133/api/v1/agent/auth/login`。可用环境变量 `QTOU_LOGIN_URL` 覆盖，但**禁止**写成 `agent.bitilinks.cn`（那是工场，不是轻投）、`localhost` 或 `127.0.0.1`（安全表单会拒绝）。MCP 默认地址是 `http://82.157.40.213:8133/api/v1/agent/mcp`，可用 `QTOU_MCP_URL` 覆盖，同样不要写成工场或 localhost。
+默认代签登录地址（轻投演示环境，写死）：`https://qtou.handsels.com/api/v1/agent/auth/login`。可用环境变量 `QTOU_LOGIN_URL` 覆盖，但**禁止**写成 `agent.bitilinks.cn`（那是工场，不是轻投）、`localhost` 或 `127.0.0.1`（安全表单会拒绝）。MCP 默认地址是 `https://qtou.handsels.com/api/v1/agent/mcp`，可用 `QTOU_MCP_URL` 覆盖，同样不要写成工场或 localhost。
 
 **Grok Bot 等宿主 bot（默认路径）**：未登录 / 401 / 第一次安装时，由宿主发起安全登录采集轻投用户名与密码。不要先调空的 `qtou_account_add` 去赌 MCP elicitation；若 elicitation 被取消、报 `-32001`，或用户看不到表单，立刻改由宿主安全登录。插件自己弹不出宿主的安全采集控件；未登录时可能返回 JSON-RPC `-32001`，`error.data` 为 `AUTH_REQUIRED`（`action=HostSecureLogin`，含 `secretRequest=QTOU_LOGIN_PASSWORD`），宿主应按此处理。仅弹出网页类安全表单并不等于密码已交给插件；RequestUserForm 可与 secret-request 并存，但不能代替交密。
 
@@ -28,9 +28,7 @@
 
 需要本机 `python3` **≥ 3.7**（`tools/qtou_mcp_proxy.py` 使用了 `subprocess.run(..., capture_output=True, text=True)`，二者均为 3.7 引入；语法用 `ast.parse(..., feature_version=(3,7))` 可通过。Mac 若提示缺命令，按系统提示装开发者工具即可）。
 
-**Windows**：Codex 用 `python3` 命令启动轻投代理，命令不存在时 Codex 里一个轻投工具都没有（AI 会说「没有加载轻投的账号或登录工具」）。在 PowerShell 运行 `python3 --version` 检查：
-- 报「找不到命令」或弹出微软商店：从微软商店安装「Python 3.12」（会自带 `python3` 命令）；已经从 python.org 装过的，到「设置 → 应用 → 高级应用设置 → 应用执行别名」里打开 `python3.exe`，或重装时勾选「Add python.exe to PATH」后再按前一种方式补上 `python3`。
-- 装好后完全退出并重开 Codex，再说「连接我的轻投账号」。
+**Codex 不需要 Python**：Codex 里的轻投直接连 `https://qtou.handsels.com`，第一次使用会自动弹出轻投登录页，登录后就能用，Windows 和 Mac 一样。下面的 `python3` 要求只针对 Grok Bot、WorkBuddy、Claude 等仍走本机代理的客户端；Windows 上这些客户端需要能运行 `python3`（微软商店的 Python 3.12 自带该命令）。
 
 入池时天眼查查不到公司，会由当前使用插件的 AI 联网搜公开资料（有 Tavily 用 Tavily，没有就用它自带的搜索并打开网页取正文）、自己核实后建档，不用另配 Grok。无人值守脚本要用 Tavily key 或 Grok API 时，分别放到 `~/.qtou/tavily-key`、`~/.qtou/grok-credentials`（权限设成 600），插件自动读取，不用在聊天里提供。
 
@@ -97,7 +95,7 @@ grok plugin install https://github.com/bitlink0521/qtou-plugin --trust
   - `qtou-bp-intake`（轻投：BP 入池）：10 步执行清单与完成标准（含 `FIELDS.md` 字段对照、`VISUALS.md` 图片、`ENRICHMENT.md` 公开信息补全）
   - `qtou-dd-report`（轻投：尽调报告）：检索文档、扫描件看图读、写初稿（含 `DD-REPORT-WRITING.md`）
   - `qtou-risk-alert`（轻投：投后风险预警）：分级、出处、确认后回写
-- **MCP**：服务端的轻投工具，加上 4 个账号工具（`qtou_account_list / add / switch / logout`）。Codex / Grok Bot 市场 / WorkBuddy 经 `tools/qtou_mcp_proxy.py`（登录与多账号）；Cursor 仍用根目录 `mcp.json` HTTP 直连（需 `QTOU_CONNECTOR_TOKEN`）。
+- **MCP**：服务端的轻投工具，加上 4 个账号工具（`qtou_account_list / add / switch / logout`）。Codex 直连服务端（浏览器登录，无账号工具）；Grok Bot 市场 / WorkBuddy 经 `tools/qtou_mcp_proxy.py`（登录与多账号）；Cursor 仍用根目录 `mcp.json` HTTP 直连（需 `QTOU_CONNECTOR_TOKEN`）。
 - **辅助脚本**：`tools/project-enrichment`（字段补全）、`tools/risk-patrol`（自动巡检）
 - **Logo**：`assets/logo.png`
 

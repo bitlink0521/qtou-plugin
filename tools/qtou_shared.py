@@ -8,8 +8,10 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import urlsplit
 
-DEFAULT_MCP_URL = os.environ.get('QTOU_MCP_URL') or 'http://82.157.40.213:8133/api/v1/agent/mcp'
-DEFAULT_AUTH_LOGIN_URL = 'http://82.157.40.213:8133/api/v1/agent/auth/login'
+DEFAULT_MCP_URL = os.environ.get('QTOU_MCP_URL') or 'https://qtou.handsels.com/api/v1/agent/mcp'
+DEFAULT_AUTH_LOGIN_URL = 'https://qtou.handsels.com/api/v1/agent/auth/login'
+# Cloudflare in front of qtou.handsels.com rejects the default Python-urllib agent.
+USER_AGENT = 'qtou-plugin/1'
 
 
 def auth_login_url():
@@ -44,7 +46,8 @@ class HttpFailure(RuntimeError):
 
 def post_json(url, payload, bearer, opener=None, timeout=90):
     request = urllib.request.Request(url, data=json.dumps(payload, ensure_ascii=False).encode(),
-                                     headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + bearer})
+                                     headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + bearer,
+                                              'User-Agent': USER_AGENT})
     try:
         with (opener or no_redirect_opener())(request, timeout=timeout) as response:
             return json.load(response)
