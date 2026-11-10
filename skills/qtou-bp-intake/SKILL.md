@@ -11,7 +11,7 @@ description: >-
 - `FAILED_PRECONDITION` 且 message 说了下一步（如「请先确认入池」「先上传」「带 companyFallback 重试」「用这个 pendingId 续办」）：照做后接着走流程，这是顺序没走对，不是故障。例如还没确认入池就调了补全工具，就回到第 4 步出确认卡。
 - `BACKEND_DB_ERROR`、`INTERNAL_ERROR`、`UPSTREAM_*`、权限错误：把 code、message 和 `ref=…` 如实转告并停下，不换路径绕过。
 
-**已入池项目接着补**（用户说「把某某项目的工商信息 / Logo / 团队补全」「继续某某的入库」）：先 `agent_projects_find({ q: "<项目名或公司名>" })` 找回 `pendingId`，`status=confirmed` 的从第 5 步起做缺的部分；`status=pending`（上次没确认完）的调 `agent_projects_get({ pendingId })` 拿新的 `confirmToken`，从第 4 步确认卡接着走，不要新建；不要让用户去找编号。只在 `poolOnly` 里出现的不是经 Agent 入池的，补全工具用不了，如实告诉用户到网页维护。找到多条时列给用户选。
+**已入池项目接着补**（用户说「把某某项目的工商信息 / Logo / 团队补全」「继续某某的入库」）：先 `agent_projects_find({ q: "<项目名或公司名>" })` 找回 `pendingId`，`status=confirmed` 的从第 5 步起做缺的部分；`status=pending`（上次没确认完）的调 `agent_projects_get({ pendingId })` 拿新的 `confirmToken`，从第 4 步确认卡接着走，不要新建；不要让用户去找编号。只在 `poolOnly` 里出现的不是经 Agent 入池的，补全工具用不了，如实告诉用户到网页维护。找到多条时列给用户选。续办时原 BP 还没上传（`bp_get` 里没有附件）而对话里没有文件路径：用 `agent_projects_bp_source` 里的文件名在本机找（`mdfind -name '<文件名>'`，或在下载、桌面、当前目录里找），找到就接着上传、看图；找不到再请用户把 BP 发过来。
 
 **入池成功不是终点。** 用户哪怕只说一句「入库」「入池轻投」，也要按下面 10 步全部做完，第 10 步的完成标准全部满足才算完成，不能挑几步做完就交差。工具返回的 `todo` 列出的都是还没做完的事，逐条处理掉。参考文件到哪一步再读，一次只读一个，不要一次性打印多份文件或整份字段目录（会被截断）。
 
