@@ -46,7 +46,7 @@
 
 ## 天眼查查不到时的兜底建档（第 4 步）
 
-`agent_projects_confirm` 返回「天眼查未取得有效公司」时，待确认记录保留，不要重新建 pending：
+`agent_projects_confirm` 返回「天眼查未取得有效公司」、且查不到同字号的工商现名（查到了就带 `companyName` 重试，见 SKILL.md 第 4 步）时，待确认记录保留，不要重新建 pending：
 
 1. 按检索工具顺序找公司官网、工商公开页、正式披露，取正文，存成 sources 文件：`{"companyName", "queries": [{"query", "searchedAt"}], "sources": [{"url", "title", "content", "retrievedAt", "publishedDate"}]}`。
 2. 核实主营业务，拼 `companyFallback`：和第 8 步的 `evidence` 一样带 `schemaVersion`、`companyName`、`searchReceipts`、`sources`（1–12 条）、`modelProposal: { companyName, entityMatched: true }`，另加

@@ -24,7 +24,7 @@ description: >-
    - `companyMatch.choiceRequired: true`（已有同名公司）：给用户两个选项「关联已有公司」「取消后改名」，用户选定后调 `agent_projects_company_choose({ pendingId, choice, companyId, confirmed: true })`。
    - **确认卡**：在对话里列出项目名、公司全称、轮次、行业、团队人数和主要缺口，问用户「确认入池吗？」，用户明确回复「确认入池」（或同义的明确同意）后才调 `agent_projects_confirm({ pendingId, confirmToken })`；用户没回复、说再看看或要改，就不调。客户端若再弹「是否允许」或接受 / 拒绝框，让用户照常点；返回 `USER_DECLINED` 视为取消，不重试。
    - `askUser` 里的字段（联系人、推荐人等）列为「可选补充」，不阻塞入池；用户回答后用其原话调 `agent_projects_user_fields`（先 `confirmed: false` 预览，再 `true`）。
-   - 返回「天眼查未取得有效公司」：按 [ENRICHMENT.md](ENRICHMENT.md)「天眼查查不到时的兜底建档」带 `companyFallback` 重试同一个 pendingId。
+   - 返回「天眼查未取得有效公司」：多半是 BP 上写的是旧名或少了字（如「有限公司」实为「有限责任公司」、迁址后换了地名）。先联网查工商现用全称，查到同字号的现名就 `agent_projects_confirm({ pendingId, confirmToken, companyName: "<现名>" })` 重试，用户原来的确认仍有效，汇报里写明 BP 名和现名；确实查不到再按 [ENRICHMENT.md](ENRICHMENT.md)「天眼查查不到时的兜底建档」带 `companyFallback` 重试。都用同一个 pendingId，不新建。
    - 用户确认入池即授权补空值：第 5–8 步直接做，不逐项问用户。
 
    以下各步都先 `confirmed: false` 预览自检（主体、值、出处、字典），通过再 `confirmed: true` 写入；自检不过的项不写，记入缺口。

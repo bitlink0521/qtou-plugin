@@ -509,6 +509,10 @@
      "type": "object",
      "description": "天眼查失败时使用联网检索正文与当前模型核实结果组成的补全CLI schemaVersion=1完整证据；未知工商字段留空"
     },
+    "companyName": {
+     "type": "string",
+     "description": "BP 上的公司名是旧名或少字、天眼查查不到时，传联网核实的工商现用全称（须与原名字号相同，如「西安索立得新能源科技有限公司」→「武汉索立得新能源科技有限责任公司」）"
+    },
     "confirmToken": {
      "type": "string",
      "description": "必填：create_pending 随确认卡签发的确认凭证；用户在确认卡上确认后才传，24小时内一次有效"
