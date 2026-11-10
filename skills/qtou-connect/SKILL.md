@@ -8,7 +8,7 @@ description: >-
 
 ## 连接
 
-**Codex（直连，浏览器登录）**：Codex 里的轻投插件直接连 `https://qtou-demo.handsels.com/api/v1/agent/mcp`，不需要 Python，也没有 `qtou_account_*` 工具。第一次使用时 Codex 会打开轻投登录页，用户在浏览器里登录即可。
+**Codex（直连，浏览器登录）**：Codex 里的轻投插件直接连 `https://qtou.handsels.com/api/v1/agent/mcp`，不需要 Python，也没有 `qtou_account_*` 工具。第一次使用时 Codex 会自动弹出轻投登录页，用户在浏览器里登录即可，登录后页面自动关闭。
 - 对话里没有任何轻投工具：请用户在 Codex 的插件 / MCP 设置里找到「轻投」点登录（Authenticate），用命令行的可运行 `codex mcp login qtou`；登录后新开一个对话。
 - 换账号：在设置里退出轻投登录（命令行 `codex mcp logout qtou`），再登录另一个账号。
 - 下面「宿主 bot」和代理的流程不适用于 Codex。
@@ -40,7 +40,7 @@ description: >-
 
 | 项 | 值 |
 | --- | --- |
-| MCP URL（Codex，HTTPS + 浏览器登录） | `https://qtou-demo.handsels.com/api/v1/agent/mcp` |
+| MCP URL（Codex，HTTPS + 浏览器登录） | `https://qtou.handsels.com/api/v1/agent/mcp` |
 | MCP URL（代理 / 宿主 bot） | `http://82.157.40.213:8133/api/v1/agent/mcp`（可用环境变量 `QTOU_MCP_URL` 覆盖；默认即此地址。禁止写成 `agent.bitilinks.cn` 或 `localhost` / `127.0.0.1`） |
 | 代签登录 URL（演示环境，写死） | `http://82.157.40.213:8133/api/v1/agent/auth/login`（可用 `QTOU_LOGIN_URL` 覆盖代理自己的 POST 目标；禁止写成工场或 localhost） |
 | 传输 | Streamable HTTP |

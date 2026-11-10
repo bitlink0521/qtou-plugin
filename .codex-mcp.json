@@ -2,7 +2,7 @@
   "mcpServers": {
     "qtou": {
       "type": "http",
-      "url": "https://qtou-demo.handsels.com/api/v1/agent/mcp"
+      "url": "https://qtou.handsels.com/api/v1/agent/mcp"
     }
   }
 }
