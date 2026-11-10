@@ -8,7 +8,7 @@ description: >-
 
 先按 `qtou-connect` 技能连上轻投。业务操作只走 qtou MCP 工具，参数传 JSON 对象（数组传数组、`confirmed` 传布尔），每个写入工具对同一项目一次传对、只调一次。返回 `isError` 时：
 - `INVALID_ARGUMENT`：message 说明哪里不对，按它改好参数后重调同一个工具，不要因此停下整个流程。
-- `FAILED_PRECONDITION` 且 message 说了下一步（如「请先确认入池」「先上传」「带 companyFallback 重试」「用这个 pendingId 续办」）：照做后接着走流程，这是顺序没走对，不是故障。例如还没确认入池就调了补全工具，就回到第 4 步弹确认卡。
+- `FAILED_PRECONDITION` 且 message 说了下一步（如「请先确认入池」「先上传」「带 companyFallback 重试」「用这个 pendingId 续办」）：照做后接着走流程，这是顺序没走对，不是故障。例如还没确认入池就调了补全工具，就回到第 4 步出确认卡。
 - `BACKEND_DB_ERROR`、`INTERNAL_ERROR`、`UPSTREAM_*`、权限错误：把 code、message 和 `ref=…` 如实转告并停下，不换路径绕过。
 
 **已入池项目接着补**（用户说「把某某项目的工商信息 / Logo / 团队补全」「继续某某的入库」）：先 `agent_projects_find({ q: "<项目名或公司名>" })` 找回 `pendingId`，`status=confirmed` 的从第 5 步起做缺的部分；`status=pending`（上次没确认完）的调 `agent_projects_get({ pendingId })` 拿新的 `confirmToken`，从第 4 步确认卡接着走，不要新建；不要让用户去找编号。只在 `poolOnly` 里出现的不是经 Agent 入池的，补全工具用不了，如实告诉用户到网页维护。找到多条时列给用户选。
@@ -22,7 +22,7 @@ description: >-
 3. **建待确认**：`agent_projects_create_pending({ projectName, companyName, text, bpEvidence })`，`companyName` 用法定全称。BP 只写了品牌或简称时自己查出全称，不要先问用户：至少搜三次（品牌 + 创始人姓名、官网域名 + 公司、品牌 + 主营产品），看官网页脚 / ICP 备案、天眼查 / 企查查 / 爱企查、招聘站和创投媒体；有两处以上独立来源给出同一全称、且创始人或产品对得上，就用它，并在汇报里写明依据。查完仍有多个候选或一个都没有，才把候选和依据列给用户选。`text` 只写几行简短标签，如「项目名称：…」「公司名称：…」「轮次：…」「行业：…」「来源：BP 文件名」，每行的值几个词即可（来源、轮次、城市限 64 字），详细内容都放进 `bpEvidence`。记下 `pendingId`、`evidenceId`、`confirmToken`。返回 `bpEvidenceDropped` 里列出的条目是引文对不上、被服务端摘掉的，其余已存下：记下这几条，第 5 步照 `reason` 改好后补。**不要因为报错把 `bpEvidence` 整个去掉重提**，那样确认后字段和团队都不会补。
 4. **确认入池**：
    - `companyMatch.choiceRequired: true`（已有同名公司）：给用户两个选项「关联已有公司」「取消后改名」，用户选定后调 `agent_projects_company_choose({ pendingId, choice, companyId, confirmed: true })`。
-   - 展示摘要（项目名、公司、轮次、团队人数、缺口）后调 `agent_projects_confirm({ pendingId, confirmToken })`。Codex 等支持表单的客户端会弹确认卡让用户点「接受 / 拒绝」，不要再让用户打字；不支持表单的客户端用文字确认卡，用户明确回复「确认入池」才调。返回 `USER_DECLINED` 视为取消，不重试。
+   - **确认卡**：在对话里列出项目名、公司全称、轮次、行业、团队人数和主要缺口，问用户「确认入池吗？」，用户明确回复「确认入池」（或同义的明确同意）后才调 `agent_projects_confirm({ pendingId, confirmToken })`；用户没回复、说再看看或要改，就不调。客户端若再弹「是否允许」或接受 / 拒绝框，让用户照常点；返回 `USER_DECLINED` 视为取消，不重试。
    - `askUser` 里的字段（联系人、推荐人等）列为「可选补充」，不阻塞入池；用户回答后用其原话调 `agent_projects_user_fields`（先 `confirmed: false` 预览，再 `true`）。
    - 返回「天眼查未取得有效公司」：按 [ENRICHMENT.md](ENRICHMENT.md)「天眼查查不到时的兜底建档」带 `companyFallback` 重试同一个 pendingId。
    - 用户确认入池即授权补空值：第 5–8 步直接做，不逐项问用户。

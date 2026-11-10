@@ -23,7 +23,6 @@ def build(meta):
     common = {key: meta[key] for key in ('name', 'version', 'description', 'author', 'homepage', 'repository', 'license', 'keywords')}
     logo = meta['logo']
     iface = dict(meta['interface'], websiteURL=meta['homepage'], logo='./' + logo, composerIcon='./' + logo)
-    proxy_relative = './' + meta['proxy']
     marketplace_entry = {'name': meta['name'], 'source': './', 'description': meta['description'],
                          'version': meta['version'], 'category': meta['interface']['category'].lower(), 'homepage': meta['homepage']}
     return {
@@ -33,8 +32,8 @@ def build(meta):
             'plugins': [{'name': meta['name'], 'source': {'source': 'local', 'path': './'},
                          'policy': {'installation': 'AVAILABLE', 'authentication': 'ON_INSTALL'},
                          'category': meta['interface']['category']}]},
-        '.codex-mcp.json': {'mcpServers': {meta['name']: {'command': 'python3', 'args': [proxy_relative], 'cwd': '.',
-                                                         'startup_timeout_sec': 300, 'tool_timeout_sec': 600}}},
+        # Codex connects straight to the HTTPS endpoint and signs in with OAuth in the browser: no local Python.
+        '.codex-mcp.json': {'mcpServers': {meta['name']: {'type': 'http', 'url': meta['mcpOAuthUrl']}}},
         '.claude-plugin/plugin.json': dict(common, logo=logo),
         '.claude-plugin/marketplace.json': {'name': meta['marketplace'], 'owner': meta['author'],
                                             'metadata': {'description': '轻投插件市场'}, 'plugins': [marketplace_entry]},

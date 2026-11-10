@@ -8,6 +8,11 @@ description: >-
 
 ## 连接
 
+**Codex（直连，浏览器登录）**：Codex 里的轻投插件直接连 `https://qtou-demo.handsels.com/api/v1/agent/mcp`，不需要 Python，也没有 `qtou_account_*` 工具。第一次使用时 Codex 会打开轻投登录页，用户在浏览器里登录即可。
+- 对话里没有任何轻投工具：请用户在 Codex 的插件 / MCP 设置里找到「轻投」点登录（Authenticate），用命令行的可运行 `codex mcp login qtou`；登录后新开一个对话。
+- 换账号：在设置里退出轻投登录（命令行 `codex mcp logout qtou`），再登录另一个账号。
+- 下面「宿主 bot」和代理的流程不适用于 Codex。
+
 **默认登录（宿主 bot，如 Grok Bot / 轻投专家）**：未登录 / 401 / 第一次安装，**直接由宿主发起安全登录**采集轻投用户名与密码。不要先调空的 `qtou_account_add` 去赌 MCP elicitation。elicitation 若被取消、报 `-32001`，或用户说「没看到 / 看不到表单」，立刻改为宿主安全登录，不要再试 elicitation。插件自己弹不出宿主的安全采集控件；未登录时工具可能返回 JSON-RPC `-32001`，`error.data` 为 `AUTH_REQUIRED`（`action=HostSecureLogin`，含代签地址、字段，以及 `secretRequest=QTOU_LOGIN_PASSWORD`），宿主应按此发起安全登录。
 
 注意：仅弹出网页类安全表单（例如只能把密文交给浏览器填充的 RequestUserForm）**不等于**已经把密码交给了本插件。RequestUserForm 可以和下面的 secret-request **并存**，但不能代替交密通路。密码不得进聊天、不得打印。若使用 RequestUserForm，`site` 必须是域名 `qtou.cn`（禁止 IP、`localhost`、`127.0.0.1`、`agent.bitilinks.cn`）；代签 POST 地址（演示环境）**不是**表单 site，二者不要混用，也不允许用工具参数覆盖站点和 URL。
@@ -35,7 +40,8 @@ description: >-
 
 | 项 | 值 |
 | --- | --- |
-| MCP URL | `http://82.157.40.213:8133/api/v1/agent/mcp`（可用环境变量 `QTOU_MCP_URL` 覆盖；默认即此地址。禁止写成 `agent.bitilinks.cn` 或 `localhost` / `127.0.0.1`） |
+| MCP URL（Codex，HTTPS + 浏览器登录） | `https://qtou-demo.handsels.com/api/v1/agent/mcp` |
+| MCP URL（代理 / 宿主 bot） | `http://82.157.40.213:8133/api/v1/agent/mcp`（可用环境变量 `QTOU_MCP_URL` 覆盖；默认即此地址。禁止写成 `agent.bitilinks.cn` 或 `localhost` / `127.0.0.1`） |
 | 代签登录 URL（演示环境，写死） | `http://82.157.40.213:8133/api/v1/agent/auth/login`（可用 `QTOU_LOGIN_URL` 覆盖代理自己的 POST 目标；禁止写成工场或 localhost） |
 | 传输 | Streamable HTTP |
 | 鉴权 | `Authorization: Bearer <agent_key>` |
@@ -46,7 +52,7 @@ description: >-
 
 ## 只走 MCP 工具（强制）
 
-业务操作只能调已连接的 qtou 工具：不自己读取 key，不用 curl / 脚本 / fetch 调 `/api/v1/agent/**`，不直连数据库，不读服务器本地文件。连不上或缺工具时如实报错并停止；客户端缓存了旧工具列表时先重连再查。例外只有一个：`agent_projects_bp_upload_url` 返回的一次性上传地址（见 `qtou-bp-intake`）。站内范本 Word 由插件本地工具 `qtou_report_word` 下载，不自己 curl。
+业务操作只能调已连接的 qtou 工具：不自己读取 key，不用 curl / 脚本 / fetch 调 `/api/v1/agent/**`，不直连数据库，不读服务器本地文件。连不上或缺工具时如实报错并停止；客户端缓存了旧工具列表时先重连再查。例外只有一个：`agent_projects_bp_upload_url` 返回的一次性上传地址（见 `qtou-bp-intake`）。尽调报告的 Word 由服务端工具 `agent_report_word` 生成，返回的下载链接交给用户在浏览器里点，不自己下载。
 
 ## 工具
 
@@ -54,10 +60,10 @@ description: >-
 |---|---|
 | 通用 | `agent_health` · `agent_dicts` |
 | BP 入池 | `agent_bp_parse` · `agent_projects_create_pending` · `agent_projects_find` · `agent_projects_financing_add` · `agent_projects_get` · `agent_projects_company_choose` · `agent_projects_confirm` · `agent_projects_reject` · `agent_projects_user_fields` · `agent_projects_bp_schema` · `agent_projects_bp_get` · `agent_projects_bp_source` · `agent_projects_bp_fill` · `agent_projects_bp_upload_url` · `agent_projects_bp_attach` · `agent_projects_bp_pages` · `agent_projects_bp_assets` · `agent_projects_web_logo` · `agent_projects_profile_get` · `agent_projects_profile_fill` |
-| 尽调报告 | `agent_documents_search` · `agent_documents_content` · `agent_documents_pages` · `qtou_report_word`（生成 Word，内部用 `agent_documents_download_url` 取范本） |
+| 尽调报告 | `agent_documents_search` · `agent_documents_content` · `agent_documents_pages` · `agent_report_word`（服务端按站内范本生成 Word，返回下载链接） |
 | 投后预警 | `agent_portfolio_list` · `agent_portfolio_quarterly` · `agent_risk_threshold_get` · `agent_risk_alerts_list` · `agent_risk_alerts_create` |
 
-写操作都要用户确认：入池要过确认卡（见 `qtou-bp-intake`），预警逐条确认（见 `qtou-risk-alert`）。用户确认入池后的补空值写入按 `qtou-bp-intake` 自动执行，不再逐项确认。
+写操作都要用户确认：入池前在对话里给出确认卡、等用户回复「确认入池」（见 `qtou-bp-intake`），预警逐条在对话里确认（见 `qtou-risk-alert`）。客户端调用工具时若再弹「是否允许」，那是客户端自己的确认，照常让用户点。用户确认入池后的补空值写入按 `qtou-bp-intake` 自动执行，不再逐项确认。
 
 ## 返回与错误
 
