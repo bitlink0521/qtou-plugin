@@ -30,6 +30,24 @@ class ClientTests(unittest.TestCase):
   def op(req,timeout):return io.BytesIO(json.dumps({'id':1,'result':{'isError':True,'structuredContent':{'error':{'code':'NOT_FOUND','message':'secret'}}}}).encode())
   with self.assertRaises(McpError) as c:LocalMcpClient(token_provider=lambda:'secret',opener=op).call('x')
   self.assertEqual(c.exception.code,'NOT_FOUND');self.assertNotIn('secret',str(c.exception))
+ def test_network_blip_is_retried(self):
+  import mcp_client,urllib.error
+  calls=[]
+  def op(req,timeout):
+   calls.append(1)
+   if len(calls)<3:raise urllib.error.URLError('reset')
+   body=json.loads(req.data);return io.BytesIO(json.dumps({'id':body['id'],'result':{'structuredContent':{'ok':True}}}).encode())
+  orig=mcp_client.time.sleep;mcp_client.time.sleep=lambda s:None
+  try:self.assertEqual(LocalMcpClient(token_provider=lambda:'secret',opener=op).call('agent_health'),{'ok':True})
+  finally:mcp_client.time.sleep=orig
+  self.assertEqual(len(calls),3)
+ def test_client_error_is_not_retried_and_says_why(self):
+  import mcp_client,urllib.error
+  calls=[]
+  def op(req,timeout):
+   calls.append(1);raise urllib.error.HTTPError(req.full_url,401,'no',{},io.BytesIO(b''))
+  with self.assertRaises(McpError) as c:LocalMcpClient(token_provider=lambda:'secret',opener=op).call('agent_health')
+  self.assertEqual(len(calls),1);self.assertIn('HTTP 401',str(c.exception))
 class PagingTests(unittest.TestCase):
  def test_all_items_follows_has_more(self):
   import mcp_client
