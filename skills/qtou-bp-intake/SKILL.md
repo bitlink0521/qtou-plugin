@@ -31,7 +31,7 @@ description: >-
 5. **补字段和团队**：确认入池时服务端已用存下的证据自动补字段和团队，结果在确认返回的 `bpFill` 里。`bpFill.status` 为 `skipped`、团队人数少于 BP，或第 3 步有被摘掉的条目时，调 `agent_projects_bp_fill({ pendingId, evidence, confirmed })` 补齐（只传要补的条目）。看返回里每项的 `filled / preserved / needs_verification`。
 6. **上传 BP 原文件**：转成 PDF（≤20MB，超限去掉内嵌视频或压缩图片），算 SHA256，调 `agent_projects_bp_upload_url({ pendingId, fileName, sha256, sizeBytes })`，按返回的地址 PUT 文件，请求头带返回 `headers` 里的 `X-Qtou-Upload-Sig`；再调 `agent_projects_bp_attach({ pendingId, uploadId, confirmed })`，记下 `fileId`。不能用本地路径代替上传。
 7. **图片和扫描页**：读 [VISUALS.md](VISUALS.md)，逐页看图、补图里的文字、裁 Logo / 团队头像 / 证据图。`bp_fill` 和确认返回里的 `todo` 列出还缺的项（团队为空、Logo 占位、哪些成员是占位头像），全部处理完才算这一步完成。
-8. **工商和档案字段**：读 [ENRICHMENT.md](ENRICHMENT.md)，用 `workflow.py` 联网检索、核实、补写工商与公司档案空字段。
+8. **工商和档案字段**：读 [ENRICHMENT.md](ENRICHMENT.md)，联网检索、核实，用 `agent_projects_profile_fill` 补写工商与公司档案空字段（先预览再写入，最后读回）。
    **历史融资**：看 `agent_projects_bp_get` 返回的 `financingTab`（融资页签现有记录，企名片同步的也在这里；`collections.financing` 只是 BP 证据，不是页签）。页签里没有、或缺了公开报道里的轮次时，联网搜「品牌 / 公司全称 + 融资」（36氪、投资界、动脉网、IT桔子、公司官网新闻、正式公告），打开报道取原文，每轮调 `agent_projects_financing_add({ pendingId, rounds: [{ round, date, money, investors, sourceTitle, sourceUrl, quote }] })` 先预览、再 `confirmed: true` 写入。`quote` 是报道里含公司名或品牌、轮次或金额的原句；只到年份、对不上主体的不写。
 9. **回读**：`agent_projects_bp_get({ pendingId })` 和 `agent_projects_profile_get({ pendingId })`。
 10. **完成标准（全部满足才结束）**：
