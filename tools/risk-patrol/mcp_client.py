@@ -87,7 +87,8 @@ class LocalMcpClient:
         request = urllib.request.Request(self.url, data=json.dumps(body).encode(),
                                         headers={'Authorization': 'Bearer ' + self._token_provider(),
                                                  'Content-Type': 'application/json',
-                                                 'Accept': 'application/json, text/event-stream'})
+                                                 'Accept': 'application/json, text/event-stream',
+                                                 'User-Agent': qtou_shared.USER_AGENT})
         payload = self._send(request)
         if not isinstance(payload, dict) or payload.get('id') != self._id:
             raise McpError('INVALID_RESPONSE')

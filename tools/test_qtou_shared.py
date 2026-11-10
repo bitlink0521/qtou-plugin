@@ -46,7 +46,7 @@ class LocalCredentialTest(unittest.TestCase):
     def test_default_auth_login_url_is_demo_74(self):
         self.assertEqual(
             qtou_shared.DEFAULT_AUTH_LOGIN_URL,
-            'http://82.157.40.213:8133/api/v1/agent/auth/login')
+            'https://qtou.handsels.com/api/v1/agent/auth/login')
         self.assertNotIn('agent.bitilinks.cn', qtou_shared.DEFAULT_AUTH_LOGIN_URL)
         self.assertNotIn('localhost', qtou_shared.DEFAULT_AUTH_LOGIN_URL)
         self.assertNotIn('127.0.0.1', qtou_shared.DEFAULT_AUTH_LOGIN_URL)

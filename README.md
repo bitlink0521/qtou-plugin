@@ -8,11 +8,11 @@
 
 插件 = **MCP（轻投工具）+ 技能（使用规则）**。只接 MCP 也能调工具，但没有技能时 AI 不知道「入池先出确认卡」「预警必须带出处」这些规矩，所以两样都要装。
 
-默认连接演示环境 `http://82.157.40.213:8133/api/v1/agent/mcp`（2026-11-09 起演示环境从 74 迁到公司内网服务器，经 NPS 映射到这个公网地址）。
+默认连接演示环境 `https://qtou.handsels.com/api/v1/agent/mcp`（演示环境在公司内网服务器上，经 Cloudflare Tunnel 提供 HTTPS 访问，网页系统是 https://qtou.handsels.com/qtou）。
 
 ## 登录
 
-默认代签登录地址（轻投演示环境，写死）：`http://82.157.40.213:8133/api/v1/agent/auth/login`。可用环境变量 `QTOU_LOGIN_URL` 覆盖，但**禁止**写成 `agent.bitilinks.cn`（那是工场，不是轻投）、`localhost` 或 `127.0.0.1`（安全表单会拒绝）。MCP 默认地址是 `http://82.157.40.213:8133/api/v1/agent/mcp`，可用 `QTOU_MCP_URL` 覆盖，同样不要写成工场或 localhost。
+默认代签登录地址（轻投演示环境，写死）：`https://qtou.handsels.com/api/v1/agent/auth/login`。可用环境变量 `QTOU_LOGIN_URL` 覆盖，但**禁止**写成 `agent.bitilinks.cn`（那是工场，不是轻投）、`localhost` 或 `127.0.0.1`（安全表单会拒绝）。MCP 默认地址是 `https://qtou.handsels.com/api/v1/agent/mcp`，可用 `QTOU_MCP_URL` 覆盖，同样不要写成工场或 localhost。
 
 **Grok Bot 等宿主 bot（默认路径）**：未登录 / 401 / 第一次安装时，由宿主发起安全登录采集轻投用户名与密码。不要先调空的 `qtou_account_add` 去赌 MCP elicitation；若 elicitation 被取消、报 `-32001`，或用户看不到表单，立刻改由宿主安全登录。插件自己弹不出宿主的安全采集控件；未登录时可能返回 JSON-RPC `-32001`，`error.data` 为 `AUTH_REQUIRED`（`action=HostSecureLogin`，含 `secretRequest=QTOU_LOGIN_PASSWORD`），宿主应按此处理。仅弹出网页类安全表单并不等于密码已交给插件；RequestUserForm 可与 secret-request 并存，但不能代替交密。
 
