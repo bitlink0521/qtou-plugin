@@ -28,6 +28,10 @@
 
 需要本机 `python3` **≥ 3.7**（`tools/qtou_mcp_proxy.py` 使用了 `subprocess.run(..., capture_output=True, text=True)`，二者均为 3.7 引入；语法用 `ast.parse(..., feature_version=(3,7))` 可通过。Mac 若提示缺命令，按系统提示装开发者工具即可）。
 
+**Windows**：Codex 用 `python3` 命令启动轻投代理，命令不存在时 Codex 里一个轻投工具都没有（AI 会说「没有加载轻投的账号或登录工具」）。在 PowerShell 运行 `python3 --version` 检查：
+- 报「找不到命令」或弹出微软商店：从微软商店安装「Python 3.12」（会自带 `python3` 命令）；已经从 python.org 装过的，到「设置 → 应用 → 高级应用设置 → 应用执行别名」里打开 `python3.exe`，或重装时勾选「Add python.exe to PATH」后再按前一种方式补上 `python3`。
+- 装好后完全退出并重开 Codex，再说「连接我的轻投账号」。
+
 入池时天眼查查不到公司，会由当前使用插件的 AI 联网搜公开资料（有 Tavily 用 Tavily，没有就用它自带的搜索并打开网页取正文）、自己核实后建档，不用另配 Grok。无人值守脚本要用 Tavily key 或 Grok API 时，分别放到 `~/.qtou/tavily-key`、`~/.qtou/grok-credentials`（权限设成 600），插件自动读取，不用在聊天里提供。
 
 ## 安装
