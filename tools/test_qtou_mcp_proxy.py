@@ -527,6 +527,32 @@ class ReportWordTests(unittest.TestCase):
                 proxy.download_style('f1', self.work.name)
 
 
+class WindowsConsoleEncodingTests(unittest.TestCase):
+    """A Chinese Windows console defaults to GBK; MCP stdio must still be UTF-8 with bare \\n."""
+
+    def test_stdio_is_utf8_even_when_the_console_is_gbk(self):
+        proxy_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'qtou_mcp_proxy.py')
+        home = tempfile.TemporaryDirectory()
+        env = {'HOME': home.name, 'PATH': os.environ.get('PATH', '/usr/bin:/bin'), 'PYTHONIOENCODING': 'gbk'}
+        proc = subprocess.Popen([sys.executable, proxy_path], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                                stderr=subprocess.DEVNULL, env=env)
+        try:
+            for message in ({'jsonrpc': '2.0', 'id': 1, 'method': 'initialize',
+                             'params': {'protocolVersion': '2024-11-05', 'capabilities': {}, 'clientInfo': {'name': '测试•', 'version': '0'}}},
+                            {'jsonrpc': '2.0', 'id': 2, 'method': 'tools/list', 'params': {}}):
+                proc.stdin.write((json.dumps(message, ensure_ascii=False) + '\n').encode('utf-8'))
+                proc.stdin.flush()
+            lines = [proc.stdout.readline(), proc.stdout.readline()]
+        finally:
+            proc.stdin.close()
+            proc.wait(10)
+            proc.stdout.close()
+            home.cleanup()
+        listed = json.loads(lines[1].decode('utf-8'))
+        self.assertTrue(all(not line.endswith(b'\r\n') for line in lines))
+        self.assertIn('轻投', ''.join(tool.get('description', '') for tool in listed['result']['tools']))
+
+
 class UnauthenticatedStdioDiscoveryTests(unittest.TestCase):
     """Spawn the real stdio proxy with a blank HOME and no login env."""
 

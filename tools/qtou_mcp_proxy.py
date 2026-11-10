@@ -734,7 +734,16 @@ def read_stdio_message():
         return message if isinstance(message, dict) else None
 
 
+def use_utf8_stdio():
+    """MCP stdio is UTF-8 with bare \n. On Windows the console code page (GBK) and \r\n translation
+    would corrupt Chinese text and break Content-Length framing."""
+    for stream, newline in ((sys.stdin, None), (sys.stdout, '\n')):
+        if hasattr(stream, 'reconfigure'):
+            stream.reconfigure(encoding='utf-8', newline=newline)
+
+
 def serve():
+    use_utf8_stdio()
     while True:
         message = read_stdio_message()
         if message is None:
