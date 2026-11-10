@@ -10,7 +10,7 @@
 4. **裁图**：`agent_projects_bp_assets({ pendingId, fileId, assets, confirmed })`，`assets` 每项：
    - `target`：`project.logo`（项目 Logo）、`team.photo`（团队头像）、`document.image`（产品、资质、客户、图表等其他证据图，需带简短标题 `name`）。
    - `page`、`bbox: [left, top, right, bottom]`（0–1，以页面左上角为原点）、`reason`、`reviewed: true`。
-   - `team.photo` 必须带真实的 `memberId`（从 `agent_projects_bp_get` 的团队列表取）和姓名；照片归属按版面上的姓名、职务判断，不做人脸身份猜测。
+   - `team.photo` 必须带真实的 `memberId`（从 `agent_projects_bp_get` 的团队列表取）和姓名；照片归属按版面上的姓名、职务判断，不做人脸身份猜测。服务端会核对该页有这位成员的姓名：PDF 文字层里有就行；姓名印在图片里（文字层只有职务）时，先看图把该页的姓名、职务照录进 BP 证据的逐页原文（`agent_projects_bp_fill` 的 `document.pages` 里对应页的 `text`），再绑定头像。
    - 客户或第三方 Logo 不能当项目 Logo。图片只能来自服务器上的原 PDF 裁图，不能生成图片冒充。
    - 每次最多 8 张。先 `confirmed: false` 预览自检，无误再 `confirmed: true`（确认入池即授权，不逐项问）。已有真实图片不覆盖，只替换空图或按姓名生成的占位图。
    - **怎么认占位图**：`agent_projects_bp_get` 里成员或项目的 `isAutoGenerate` 为 `"0"`，就是按姓名自动生成的占位图，不是真照片。BP 里有这个人的照片，就要裁图替换。
