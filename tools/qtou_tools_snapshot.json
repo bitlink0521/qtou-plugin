@@ -481,7 +481,7 @@
  },
  {
   "name": "agent_projects_get",
-  "description": "场景①：查询待确认项目。返回 companyMatch：本租户有同名公司时确认卡只给两个选项（关联已有公司 / 取消后改名），不允许新建同名公司",
+  "description": "场景①：查询待确认项目；本人创建、还没确认的会附一个新的 confirmToken，上次没确认完时用它接着弹确认卡确认。返回 companyMatch：本租户有同名公司时确认卡只给两个选项（关联已有公司 / 取消后改名），不允许新建同名公司",
   "inputSchema": {
    "type": "object",
    "properties": {
