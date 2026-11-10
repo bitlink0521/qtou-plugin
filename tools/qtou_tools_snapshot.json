@@ -1025,7 +1025,7 @@
  },
  {
   "name": "agent_projects_bp_pages",
-  "description": "读取本项目BP的真实页面图像及文字，每次1至2页；图片以MCP image内容返回",
+  "description": "读取本项目BP的真实页面图像及文字，每次1至2页；图片以MCP image内容返回（另附imageUrl）。overview=true 时最多12页拼成一张缩略总览，用来先找出有照片、Logo、图表的页",
   "inputSchema": {
    "type": "object",
    "properties": {
@@ -1040,11 +1040,15 @@
     "pages": {
      "type": "array",
      "minItems": 1,
-     "maxItems": 2,
+     "maxItems": 12,
      "items": {
       "type": "integer",
       "minimum": 1
      }
+    },
+    "overview": {
+     "type": "boolean",
+     "description": "缩略总览模式"
     }
    },
    "required": [
