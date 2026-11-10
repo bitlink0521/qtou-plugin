@@ -299,31 +299,40 @@
           }
          },
          "name": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 64
          },
          "jop": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 64
          },
          "introduction": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 2000
          },
          "education": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 64
          },
          "workExperience": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 2000
          },
          "exclusiveResources": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 2000
          },
          "telephone": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 64
          },
          "weChat": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 255
          },
          "businessJob": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 1024
          },
          "stockRate": {
           "type": "number",
@@ -472,7 +481,7 @@
  },
  {
   "name": "agent_projects_get",
-  "description": "场景①：查询待确认项目。返回 companyMatch：本租户有同名公司时确认卡只给两个选项（关联已有公司 / 取消后改名），不允许新建同名公司",
+  "description": "场景①：查询待确认项目；本人创建、还没确认的会附一个新的 confirmToken，上次没确认完时用它接着弹确认卡确认。返回 companyMatch：本租户有同名公司时确认卡只给两个选项（关联已有公司 / 取消后改名），不允许新建同名公司",
   "inputSchema": {
    "type": "object",
    "properties": {
@@ -819,31 +828,40 @@
           }
          },
          "name": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 64
          },
          "jop": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 64
          },
          "introduction": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 2000
          },
          "education": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 64
          },
          "workExperience": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 2000
          },
          "exclusiveResources": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 2000
          },
          "telephone": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 64
          },
          "weChat": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 255
          },
          "businessJob": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 1024
          },
          "stockRate": {
           "type": "number",
@@ -1264,6 +1282,89 @@
     "pendingId",
     "statement",
     "fields"
+   ]
+  }
+ },
+ {
+  "name": "agent_projects_financing_add",
+  "description": "场景①：企名片没有、BP 也没写的历史融资，按公开报道补进项目「融资」页签（只对已确认入池项目）。每轮给轮次、日期（YYYY-MM 或 YYYY-MM-DD）、金额、投资方、报道标题和链接、报道原文摘录（须含本公司名称或品牌，以及这一轮的轮次或金额）；同一轮次已有的不重复写；默认预览，confirmed=true 写入",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "pendingId": {
+     "type": "string",
+     "description": "原待确认id"
+    },
+    "rounds": {
+     "type": "array",
+     "description": "[{round,date,money?,investors?,sourceTitle?,sourceUrl,quote}]，最多20轮",
+     "items": {
+      "type": "object",
+      "properties": {
+       "round": {
+        "type": "string",
+        "description": "轮次，如 天使轮、Pre-A轮、A轮、战略融资"
+       },
+       "date": {
+        "type": "string",
+        "description": "报道里的融资时间，YYYY-MM 或 YYYY-MM-DD"
+       },
+       "money": {
+        "type": "string",
+        "description": "金额原文，如 数千万元；未披露留空"
+       },
+       "investors": {
+        "type": "string",
+        "description": "投资方，多个用顿号分隔"
+       },
+       "sourceTitle": {
+        "type": "string",
+        "description": "报道标题"
+       },
+       "sourceUrl": {
+        "type": "string",
+        "description": "报道完整链接"
+       },
+       "quote": {
+        "type": "string",
+        "description": "报道原文摘录 10 到 300 字，含公司名或品牌、轮次或金额"
+       }
+      },
+      "required": [
+       "round",
+       "date",
+       "sourceUrl",
+       "quote"
+      ],
+      "additionalProperties": false
+     },
+     "minItems": 1,
+     "maxItems": 20
+    },
+    "confirmed": {
+     "type": "boolean",
+     "description": "false预览，true写入"
+    }
+   },
+   "required": [
+    "pendingId",
+    "rounds"
+   ]
+  }
+ },
+ {
+  "name": "agent_projects_find",
+  "description": "场景①：用户只给项目名、公司名或 projectId 时，查回入池记录的 pendingId 和状态（只读）。对已入池项目继续补全 BP、工商档案、Logo 前先用它找 pendingId，不要让用户去找编号",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "q": {
+     "type": "string",
+     "description": "项目名、公司全称或其中一段，或 projectId"
+    }
+   },
+   "required": [
+    "q"
    ]
   }
  },
@@ -1794,7 +1895,7 @@
      "type": "array",
      "description": "[{projectId,query,source,hits,status,error}]",
      "items": {
-      "$ref": "$.result.tools[26].inputSchema.properties.sources.items"
+      "$ref": "$.result.tools[28].inputSchema.properties.sources.items"
      }
     },
     "runId": {

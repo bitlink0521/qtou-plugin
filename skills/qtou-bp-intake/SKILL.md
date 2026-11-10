@@ -11,6 +11,8 @@ description: >-
 - `FAILED_PRECONDITION` 且 message 说了下一步（如「请先确认入池」「先上传」「带 companyFallback 重试」「用这个 pendingId 续办」）：照做后接着走流程，这是顺序没走对，不是故障。例如还没确认入池就调了补全工具，就回到第 4 步弹确认卡。
 - `BACKEND_DB_ERROR`、`INTERNAL_ERROR`、`UPSTREAM_*`、权限错误：把 code、message 和 `ref=…` 如实转告并停下，不换路径绕过。
 
+**已入池项目接着补**（用户说「把某某项目的工商信息 / Logo / 团队补全」「继续某某的入库」）：先 `agent_projects_find({ q: "<项目名或公司名>" })` 找回 `pendingId`，`status=confirmed` 的从第 5 步起做缺的部分；`status=pending`（上次没确认完）的调 `agent_projects_get({ pendingId })` 拿新的 `confirmToken`，从第 4 步确认卡接着走，不要新建；不要让用户去找编号。只在 `poolOnly` 里出现的不是经 Agent 入池的，补全工具用不了，如实告诉用户到网页维护。找到多条时列给用户选。
+
 **入池成功不是终点。** 用户哪怕只说一句「入库」「入池轻投」，也要按下面 10 步全部做完，第 10 步的完成标准全部满足才算完成，不能挑几步做完就交差。工具返回的 `todo` 列出的都是还没做完的事，逐条处理掉。参考文件到哪一步再读，一次只读一个，不要一次性打印多份文件或整份字段目录（会被截断）。
 
 ## 执行清单
@@ -30,12 +32,14 @@ description: >-
 6. **上传 BP 原文件**：转成 PDF（≤20MB，超限去掉内嵌视频或压缩图片），算 SHA256，调 `agent_projects_bp_upload_url({ pendingId, fileName, sha256, sizeBytes })`，按返回的地址 PUT 文件，请求头带返回 `headers` 里的 `X-Qtou-Upload-Sig`；再调 `agent_projects_bp_attach({ pendingId, uploadId, confirmed })`，记下 `fileId`。不能用本地路径代替上传。
 7. **图片和扫描页**：读 [VISUALS.md](VISUALS.md)，逐页看图、补图里的文字、裁 Logo / 团队头像 / 证据图。`bp_fill` 和确认返回里的 `todo` 列出还缺的项（团队为空、Logo 占位、哪些成员是占位头像），全部处理完才算这一步完成。
 8. **工商和档案字段**：读 [ENRICHMENT.md](ENRICHMENT.md)，用 `workflow.py` 联网检索、核实、补写工商与公司档案空字段。
+   **历史融资**：看 `agent_projects_bp_get` 返回的 `financingTab`（融资页签现有记录，企名片同步的也在这里；`collections.financing` 只是 BP 证据，不是页签）。页签里没有、或缺了公开报道里的轮次时，联网搜「品牌 / 公司全称 + 融资」（36氪、投资界、动脉网、IT桔子、公司官网新闻、正式公告），打开报道取原文，每轮调 `agent_projects_financing_add({ pendingId, rounds: [{ round, date, money, investors, sourceTitle, sourceUrl, quote }] })` 先预览、再 `confirmed: true` 写入。`quote` 是报道里含公司名或品牌、轮次或金额的原句；只到年份、对不上主体的不写。
 9. **回读**：`agent_projects_bp_get({ pendingId })` 和 `agent_projects_profile_get({ pendingId })`。
 10. **完成标准（全部满足才结束）**：
     - 团队人数 = BP 里的核心成员人数，每人有职务和履历；BP 有照片的成员，头像是从 BP 裁的真照片（`isAutoGenerate` 为 `"0"` 的是姓名占位图，不算）。
     - BP 里有内容的字段都已写入，或列在缺口里并写明原因。
     - BP 附件有 `fileId`。
     - 工商与档案字段已走完第 8 步，剩余空字段都有原因。
+    - 融资页签有公开可查的历史融资；查过没有的，写明查了哪些来源。
     - 有一项不满足，就回到对应步骤补做；确实做不了的写进汇报的「未完成」。
 
 ## 底线（不满足的值不写）
