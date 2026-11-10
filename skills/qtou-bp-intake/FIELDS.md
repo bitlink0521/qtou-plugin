@@ -119,6 +119,8 @@
 ## 子表
 
 - **核心团队** `team[]`：每人一条 `{name, jop, education, workExperience, introduction, asOf, nature, sources}`（`jop` 是职务，服务端字段名就是这么拼的）。按项目内姓名去重，重名歧义会拒绝。新成员可填明确的股比（0–100）和席位。照片另用 `agent_projects_bp_assets` 写。
+  - 每人至少一条 `sources.quote` 要逐字包含本人姓名（如团队页「丁鹏 创始人&CEO」那一句），只引履历段的会被摘掉。
+  - 长度上限：`name`、`jop`、`education`、`telephone` 各 64 字，`businessJob` 1024 字，`introduction`、`workExperience` 2000 字。学历写「某校 某专业 博士」这样一句，详细经历放 `workExperience`。
 - **历史融资** `financing[]`：`{historyFinancing, asOf, nature, sources}`，写成历史披露文本，不写进实际财务列。
 - **竞品**：只写进 `project.competingProducts` 文字；外部竞品关联 ID 服务端未实现（needs_mapping），不要伪造。
 - **BP 附件**：必须真实上传 PDF（见主流程），不能用本地路径代替。

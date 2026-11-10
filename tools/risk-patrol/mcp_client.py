@@ -1,5 +1,6 @@
 """qtou MCP JSON-RPC client. Credentials remain in process memory."""
 import json
+import time
 import os
 import sys
 import urllib.error
@@ -62,6 +63,23 @@ class LocalMcpClient:
         self._open = opener or qtou_shared.no_redirect_opener()
         self._id = 0
 
+    def _send(self, request, attempts=3):
+        """Network blips and 5xx are retried (the write tools only fill empty fields, so a retry is safe)."""
+        for attempt in range(attempts):
+            try:
+                with self._open(request, timeout=45) as response:
+                    return json.load(response)
+            except urllib.error.HTTPError as error:
+                error.close()
+                detail = 'HTTP %d' % error.code
+                if error.code < 500:
+                    break
+            except Exception as error:
+                detail = type(error).__name__
+            if attempt + 1 < attempts:
+                time.sleep(2 * (attempt + 1))
+        raise McpError('UPSTREAM_UNAVAILABLE', '轻投服务不可用或响应无效（%s）' % detail)
+
     def call(self, tool, arguments=None):
         self._id += 1
         body = {'jsonrpc': '2.0', 'id': self._id, 'method': 'tools/call',
@@ -70,14 +88,7 @@ class LocalMcpClient:
                                         headers={'Authorization': 'Bearer ' + self._token_provider(),
                                                  'Content-Type': 'application/json',
                                                  'Accept': 'application/json, text/event-stream'})
-        try:
-            with self._open(request, timeout=45) as response:
-                payload = json.load(response)
-        except urllib.error.HTTPError as error:
-            error.close()
-            raise McpError('UPSTREAM_UNAVAILABLE', '轻投服务不可用或响应无效') from None
-        except Exception:
-            raise McpError('UPSTREAM_UNAVAILABLE', '轻投服务不可用或响应无效') from None
+        payload = self._send(request)
         if not isinstance(payload, dict) or payload.get('id') != self._id:
             raise McpError('INVALID_RESPONSE')
         if 'error' in payload:
