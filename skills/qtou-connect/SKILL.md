@@ -65,6 +65,10 @@ description: >-
 
 写操作都要用户确认：入池前在对话里给出确认卡、等用户回复「确认入池」（见 `qtou-bp-intake`），预警逐条在对话里确认（见 `qtou-risk-alert`）。客户端调用工具时若再弹「是否允许」，那是客户端自己的确认，照常让用户点。用户确认入池后的补空值写入按 `qtou-bp-intake` 自动执行，不再逐项确认。
 
+## Windows 命令
+
+技能里的命令按 Mac / Linux 写。Windows（PowerShell）对应：`curl` 写成 `curl.exe`（PowerShell 的 `curl` 是另一个命令）；`shasum -a 256 <文件>` 用 `(Get-FileHash <文件> -Algorithm SHA256).Hash.ToLower()`；`date -u +%Y-%m-%dT%H:%M:%SZ` 用 `(Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")`；`mdfind -name <文件名>` 用 `Get-ChildItem $HOME -Recurse -Filter <文件名> -ErrorAction SilentlyContinue`。
+
 ## 返回与错误
 
 - 列表类工具（`agent_documents_search`、`agent_portfolio_list`、`agent_risk_alerts_list`、`agent_dicts`）返回 `{ items: [...] }`。`agent_portfolio_list`、`agent_risk_alerts_list`、`agent_documents_search` 分页：传 `page`（从 1 起）和 `pageSize`（1–50，默认 20），返回 `total`、`hasMore`；要全量时 `hasMore: true` 就继续翻。
