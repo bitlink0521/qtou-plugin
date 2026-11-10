@@ -19,7 +19,7 @@ description: >-
    - 把命中列给用户：文档名、`fileId`、`readable`。返回的 `path` 只用于展示，读正文一律用 `fileId`。
    - 0 条就如实说没找到，请用户换关键词。
 2. **读正文**：对属于该项目、`readable: true` 的每份文档调 `agent_documents_content({ fileId, maxChars })`。
-   - `textStatus=no_text_layer`（扫描件或图片）不算不可读：用 `agent_documents_pages({ fileId, pages: [n, n+1] })` 按页看图读，每次 1–2 页，按 `pageCount` 读完需要的页。逐字照抄，看不清写「看不清」，不猜；底稿记下页码。Word / PPT 没有页面图，按不可读处理。
+   - `textStatus=no_text_layer`（扫描件或图片）不算不可读：用 `agent_documents_pages({ fileId, pages: [n, n+1] })` 按页看图读，每次 1–2 页，按 `pageCount` 读完需要的页。看不到返回的图片时，把每页的 `imageUrl` 用 `curl -sSL -o <本地文件> '<imageUrl>'` 下载后用看图工具打开（30 分钟有效）。逐字照抄，看不清写「看不清」，不猜；底稿记下页码。Word / PPT 没有页面图，按不可读处理。
    - 返回 `FAILED_PRECONDITION`（无实体文件）、跨租户或无权限：记为「未读」及原因，其余照常，不绕道读文件。
 3. **定写法和版式**（先读 [DD-REPORT-WRITING.md](DD-REPORT-WRITING.md) 第 0 节）：
    ① 不带 `projectId` 搜「尽调报告 / 投资建议书 / 尽职调查 / 投资分析报告」等，挑 1–3 份最完整的读全文，学结构和用词，以它为准；
