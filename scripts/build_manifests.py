@@ -37,24 +37,15 @@ def build(meta):
         '.claude-plugin/plugin.json': dict(common, logo=logo),
         '.claude-plugin/marketplace.json': {'name': meta['marketplace'], 'owner': meta['author'],
                                             'metadata': {'description': '轻投插件市场'}, 'plugins': [marketplace_entry]},
-        '.grok-mcp.json': {'mcpServers': {meta['name']: {
-            'command': 'python3',
-            'args': ['${CURSOR_PLUGIN_ROOT}/' + meta['proxy']],
-            'cwd': '${CURSOR_PLUGIN_ROOT}',
-            'env': {'PYTHONPATH': '${CURSOR_PLUGIN_ROOT}/tools'},
-        }}},
+        # Every client connects to the HTTPS endpoint and signs in with OAuth in the browser.
+        '.grok-mcp.json': {'mcpServers': {meta['name']: {'type': 'http', 'url': meta['mcpOAuthUrl']}}},
         '.grok-plugin/plugin.json': dict(common, logo=logo, mcpServers='./.grok-mcp.json'),
-        '.mcp.json': {'mcpServers': {meta['name']: {'command': 'python3', 'args': ['${CLAUDE_PLUGIN_ROOT}/' + meta['proxy']]}}},
-        # Grok Bot marketplace reads .cursor-plugin (empiric); point it at stdio proxy.
-        # Root mcp.json stays HTTP for Cursor 直连 / 手动 HTTP. variables dropped: InstallPlugin
-        # values do not populate QTOU_CONNECTOR_TOKEN on Grok; the host should pop
-        # HostSecureLogin then call qtou_account_add with username/password (see skills/qtou-connect).
-        # Codex may still use elicitation as a fallback; host bots must not gamble on it.
+        '.mcp.json': {'mcpServers': {meta['name']: {'type': 'http', 'url': meta['mcpOAuthUrl']}}},
+        # Grok Bot marketplace reads .cursor-plugin (empiric).
         '.cursor-plugin/plugin.json': dict(common, logo=logo, mcpServers='./.grok-mcp.json'),
         '.cursor-plugin/marketplace.json': {'name': meta['marketplace'], 'owner': meta['author'],
                                             'metadata': {'description': '轻投插件市场'}, 'plugins': [marketplace_entry]},
-        'mcp.json': {'mcpServers': {meta['name']: {'type': 'http', 'url': meta['mcpUrl'],
-                                                  'headers': {'Authorization': 'Bearer ${QTOU_CONNECTOR_TOKEN}'}}}},
+        'mcp.json': {'mcpServers': {meta['name']: {'type': 'http', 'url': meta['mcpOAuthUrl']}}},
     }
 
 
@@ -81,7 +72,7 @@ def _resolve_mcp_servers(cursor_plugin, root):
     raise ValueError('.cursor-plugin mcpServers must be a path string or inline object')
 
 
-def validate_cursor_plugin_stdio(root=ROOT, cursor_plugin=None):
+def validate_cursor_plugin_mcp(root=ROOT, cursor_plugin=None):
     """Ensure Grok marketplace path (.cursor-plugin) wires stdio only, no HTTP, no stray ${VARS}.
 
     Allowed placeholders: CURSOR_PLUGIN_ROOT only (plugin install root).
@@ -95,17 +86,20 @@ def validate_cursor_plugin_stdio(root=ROOT, cursor_plugin=None):
     found = set(PLACEHOLDER_RE.findall(blob))
     extra = found - ALLOWED_STDIO_PLACEHOLDERS
     if extra:
-        raise ValueError('stdio MCP chain has non-whitelisted placeholders: %s' % ', '.join(sorted(extra)))
+        raise ValueError('.cursor-plugin MCP chain has non-whitelisted placeholders: %s' % ', '.join(sorted(extra)))
     for name, server in servers.items():
         if not isinstance(server, dict):
             raise ValueError('server %s must be an object' % name)
-        if 'command' not in server:
-            raise ValueError('server %s must be stdio (command), got keys %s' % (name, sorted(server)))
-        if 'url' in server:
-            raise ValueError('server %s must not have url (HTTP not allowed on .cursor-plugin chain)' % name)
-        stype = server.get('type')
-        if isinstance(stype, str) and stype.lower() in ('http', 'streamable-http', 'sse'):
-            raise ValueError('server %s must not use type %s' % (name, stype))
+        if 'command' in server:
+            if 'url' in server:
+                raise ValueError('server %s must not mix command and url' % name)
+            continue
+        # Remote servers sign in with OAuth in the browser; a static token header would need
+        # an install-time variable, which Grok does not populate.
+        if str(server.get('type', '')).lower() != 'http' or not str(server.get('url', '')).startswith('https://'):
+            raise ValueError('server %s must be stdio (command) or type http with an https url, got keys %s' % (name, sorted(server)))
+        if 'headers' in server:
+            raise ValueError('server %s must not send static headers; it signs in with OAuth' % name)
     return label, sorted(servers)
 
 
@@ -128,11 +122,11 @@ def main():
         # On --check, read from disk (must match built when not stale); still validate disk/built content.
         if '--check' in sys.argv:
             # Validate the built intent even if disk is stale, and also disk if present.
-            validate_cursor_plugin_stdio(ROOT, cursor_plugin=built['.cursor-plugin/plugin.json'])
+            validate_cursor_plugin_mcp(ROOT, cursor_plugin=built['.cursor-plugin/plugin.json'])
             if (ROOT / '.cursor-plugin' / 'plugin.json').is_file():
-                validate_cursor_plugin_stdio(ROOT)
+                validate_cursor_plugin_mcp(ROOT)
         else:
-            validate_cursor_plugin_stdio(ROOT)
+            validate_cursor_plugin_mcp(ROOT)
     except ValueError as err:
         print('cursor-plugin stdio validation failed: %s' % err)
         return 1

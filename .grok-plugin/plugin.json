@@ -1,6 +1,6 @@
 {
   "name": "qtou",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "连接轻投：BP 入池、尽调检索、投后风险预警三场景，首次使用在浏览器登录轻投，不用装任何软件。",
   "author": {
     "name": "Bitilinks",
