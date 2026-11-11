@@ -1295,13 +1295,13 @@
  },
  {
   "name": "agent_files_convert_url",
-  "description": "BP 或材料是 PPT/PPTX/DOC/DOCX 时在服务端转成 PDF（客户端不用装 Office）：返回一次性上传地址（10 分钟有效），PUT 原文件后响应里的 pdfUrl 即转好的 PDF（30 分钟有效），下载到本地后按 PDF 继续",
+  "description": "BP 或材料是 PPT/PPTX/Keynote/Word/WPS 存的文档等非 PDF 格式时在服务端转成 PDF（客户端不用装 Office）：返回一次性上传地址（10 分钟有效），PUT 原文件后响应里的 pdfUrl 即转好的 PDF（30 分钟有效），下载到本地后按 PDF 继续",
   "inputSchema": {
    "type": "object",
    "properties": {
     "fileName": {
      "type": "string",
-     "description": "原文件名，.ppt/.pptx/.doc/.docx"
+     "description": "原文件名：ppt、pptx、pps、ppsx、key、odp、doc、docx、wps、rtf、odt、pages"
     },
     "sha256": {
      "type": "string",
