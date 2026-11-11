@@ -2,10 +2,7 @@
   "mcpServers": {
     "qtou": {
       "type": "http",
-      "url": "https://qtou.handsels.com/api/v1/agent/mcp",
-      "headers": {
-        "Authorization": "Bearer ${QTOU_CONNECTOR_TOKEN}"
-      }
+      "url": "https://qtou.handsels.com/api/v1/agent/mcp"
     }
   }
 }

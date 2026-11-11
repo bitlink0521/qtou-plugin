@@ -17,23 +17,23 @@ class ManifestTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
     def test_cursor_plugin_stdio_validation_passes_on_generated_tree(self):
-        label, names = bm.validate_cursor_plugin_stdio(ROOT)
+        label, names = bm.validate_cursor_plugin_mcp(ROOT)
         self.assertEqual(label, './.grok-mcp.json')
         self.assertEqual(names, ['qtou'])
 
-    def test_cursor_plugin_stdio_rejects_http_url(self):
+    def test_cursor_plugin_rejects_plain_http_or_static_headers(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             (root / '.cursor-plugin').mkdir()
-            mcp = {'mcpServers': {'qtou': {'type': 'http', 'url': 'http://example.test/mcp'}}}
+            mcp = {'mcpServers': {'qtou': {'type': 'http', 'url': 'http://example.test/mcp', 'headers': {'Authorization': 'Bearer x'}}}}
             (root / '.grok-mcp.json').write_text(json.dumps(mcp))
             (root / '.cursor-plugin' / 'plugin.json').write_text(json.dumps({
                 'name': 'qtou', 'mcpServers': './.grok-mcp.json',
             }))
             with self.assertRaises(ValueError) as ctx:
-                bm.validate_cursor_plugin_stdio(root)
+                bm.validate_cursor_plugin_mcp(root)
             msg = str(ctx.exception)
-            self.assertTrue('command' in msg or 'url' in msg or 'http' in msg.lower(), msg)
+            self.assertTrue('https' in msg or 'headers' in msg, msg)
 
     def test_cursor_plugin_stdio_rejects_connector_token_placeholder(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -49,7 +49,7 @@ class ManifestTests(unittest.TestCase):
                 'name': 'qtou', 'mcpServers': './.grok-mcp.json',
             }))
             with self.assertRaises(ValueError) as ctx:
-                bm.validate_cursor_plugin_stdio(root)
+                bm.validate_cursor_plugin_mcp(root)
             self.assertIn('QTOU_CONNECTOR_TOKEN', str(ctx.exception))
 
 

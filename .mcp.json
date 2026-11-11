@@ -1,10 +1,8 @@
 {
   "mcpServers": {
     "qtou": {
-      "command": "python3",
-      "args": [
-        "${CLAUDE_PLUGIN_ROOT}/tools/qtou_mcp_proxy.py"
-      ]
+      "type": "http",
+      "url": "https://qtou.handsels.com/api/v1/agent/mcp"
     }
   }
 }
