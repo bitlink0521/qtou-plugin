@@ -1025,7 +1025,7 @@
  },
  {
   "name": "agent_projects_bp_pages",
-  "description": "读取本项目BP的真实页面图像及文字，每次1至2页；图片以MCP image内容返回",
+  "description": "读取本项目BP的真实页面图像及文字，每次1至2页；图片以MCP image内容返回（另附imageUrl）。overview=true 时最多12页拼成一张缩略总览，用来先找出有照片、Logo、图表的页",
   "inputSchema": {
    "type": "object",
    "properties": {
@@ -1040,11 +1040,15 @@
     "pages": {
      "type": "array",
      "minItems": 1,
-     "maxItems": 2,
+     "maxItems": 12,
      "items": {
       "type": "integer",
       "minimum": 1
      }
+    },
+    "overview": {
+     "type": "boolean",
+     "description": "缩略总览模式"
     }
    },
    "required": [
@@ -1286,6 +1290,31 @@
     "pendingId",
     "statement",
     "fields"
+   ]
+  }
+ },
+ {
+  "name": "agent_files_convert_url",
+  "description": "BP 或材料是 PPT/PPTX/Keynote/Word/WPS 存的文档等非 PDF 格式时在服务端转成 PDF（客户端不用装 Office）：返回一次性上传地址（10 分钟有效），PUT 原文件后响应里的 pdfUrl 即转好的 PDF（30 分钟有效），下载到本地后按 PDF 继续",
+  "inputSchema": {
+   "type": "object",
+   "properties": {
+    "fileName": {
+     "type": "string",
+     "description": "原文件名：ppt、pptx、pps、ppsx、key、odp、doc、docx、wps、rtf、odt、pages"
+    },
+    "sha256": {
+     "type": "string",
+     "description": "原文件 sha256（shasum -a 256）"
+    },
+    "size": {
+     "type": "integer",
+     "description": "字节数，可选"
+    }
+   },
+   "required": [
+    "fileName",
+    "sha256"
    ]
   }
  },
@@ -1945,7 +1974,7 @@
      "type": "array",
      "description": "[{projectId,query,source,hits,status,error}]",
      "items": {
-      "$ref": "$.result.tools[29].inputSchema.properties.sources.items"
+      "$ref": "$.result.tools[30].inputSchema.properties.sources.items"
      }
     },
     "runId": {

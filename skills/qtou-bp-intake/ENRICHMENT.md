@@ -19,10 +19,10 @@
 {
   "schemaVersion": 1,
   "companyName": "<与项目公司全称一字不差>",
-  "searchReceipts": [{ "query": "<实际查询词>", "searchedAt": "2026-11-10T10:00:00+08:00" }],
+  "searchReceipts": [{ "query": "<实际查询词>", "searchedAt": "<date -u +%Y-%m-%dT%H:%M:%SZ 的输出>" }],
   "sources": [{ "id": "s1", "url": "https://…", "title": "<网页标题>",
                 "content": "<网页正文：须含公司全称和下面的引文，可截取相关连续段落，30–20000 字>",
-                "retrievedAt": "2026-11-10T10:01:00+08:00", "publishedDate": "<有就写>" }],
+                "retrievedAt": "<同上，打开网页时的时间>", "publishedDate": "<有就写>" }],
   "modelProposal": {
     "companyName": "<同上>", "entityMatched": true,
     "fields": [{ "field": "juridicalPerson", "value": "张三", "status": "supported",
@@ -31,7 +31,7 @@
 }
 ```
 
-   - 时间带时区，7 天内；`value` 必须逐字出现在 `quote` 里，`quote` 必须逐字出现在该来源 `content` 里。
+   - 时间用命令 `date -u +%Y-%m-%dT%H:%M:%SZ` 取（UTC，结尾 Z；Windows 见 qtou-connect「Windows 命令」），不要手写、不要照抄示例，7 天内；`value` 必须逐字出现在 `quote` 里，`quote` 必须逐字出现在该来源 `content` 里。
    - 可补字段：`juridicalPerson` 法人、`foundingTime` 成立日期（YYYY-MM-DD）、`registeredCapital` 注册资本（带单位，如「1000万元」「2839.0417万人民币」）、`registeredCurrency`、`state` 经营状态、`type` 工商类型、`registrationAuthority` 登记机关、`sociaCreditCode` 统一社会信用代码、`registeredAddress` 注册地址、`englishName`、`province` 省份、`abbreviation` 简称、`companyWebsite` 网址、`officeAddress` 办公地址、`contactNumber` 电话、`companyMailbox` 邮箱、`companyProfile` 简介、`staffNumber` 员工数（纯数字）、`officialAccounts` 公众号、`primaryBusiness` 主营业务、`businessModel` 商业模式、`cityValue` 城市、`projectShorthand` 项目简称、`yewu` 一句话描述（≤30 字）、`isListing` 是否上市、`honour` 荣誉、`productionAddress` 生产地址。找不到的字段不写进 `fields`。
 4. `agent_projects_profile_fill({ pendingId, evidence, confirmed: false })` 预览：`status=ready` 的会写；`needs_verification` 看 `reason`（引文没逐字匹配、单位不对、字典没匹配等），能改就改好再预览，改不了的放进汇报。
 5. 逐项核对预览：主体是否本公司、引文是否连续原文、值和单位是否对。确认入池即授权补空值，不再问用户，调 `agent_projects_profile_fill({ pendingId, evidence, confirmed: true })` 写入。

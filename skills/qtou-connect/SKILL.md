@@ -65,11 +65,16 @@ description: >-
 
 写操作都要用户确认：入池前在对话里给出确认卡、等用户回复「确认入池」（见 `qtou-bp-intake`），预警逐条在对话里确认（见 `qtou-risk-alert`）。客户端调用工具时若再弹「是否允许」，那是客户端自己的确认，照常让用户点。用户确认入池后的补空值写入按 `qtou-bp-intake` 自动执行，不再逐项确认。
 
+## Windows 命令
+
+技能里的命令按 Mac / Linux 写。Windows（PowerShell）对应：`curl` 写成 `curl.exe`（PowerShell 的 `curl` 是另一个命令）；`shasum -a 256 <文件>` 用 `(Get-FileHash <文件> -Algorithm SHA256).Hash.ToLower()`；`date -u +%Y-%m-%dT%H:%M:%SZ` 用 `(Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")`；`mdfind -name <文件名>` 用 `Get-ChildItem $HOME -Recurse -Filter <文件名> -ErrorAction SilentlyContinue`。
+
 ## 返回与错误
 
 - 列表类工具（`agent_documents_search`、`agent_portfolio_list`、`agent_risk_alerts_list`、`agent_dicts`）返回 `{ items: [...] }`。`agent_portfolio_list`、`agent_risk_alerts_list`、`agent_documents_search` 分页：传 `page`（从 1 起）和 `pageSize`（1–50，默认 20），返回 `total`、`hasMore`；要全量时 `hasMore: true` 就继续翻。
 - 失败返回 `isError: true`，正文 `{"error": {"code", "message", "tool"}}`。code 有 `INVALID_ARGUMENT`、`NOT_FOUND`、`FAILED_PRECONDITION`、`BACKEND_DB_ERROR`、`INTERNAL_ERROR`、`UPSTREAM_*`。把 code 和 message 如实告诉用户，带 `ref=…` 的一并给出（管理员凭它查日志）；不改走别的路径，也不写成「没找到」。
 - 工具调用没拿到返回、报网络或传输错误（如 `error sending request`、连接被断开、超时）：多是长时间空闲后连接被网络断开，不是轻投的业务错误，原样重试同一调用（间隔几秒，最多 2 次）。写入类工具重试前先用对应的读取工具看一眼是否已经写进去，写进去了就不再重试。重试仍失败再如实告诉用户并停下。
+- 读取类工具（名字以 `_get`、`_list`、`_find`、`_search`、`_pages` 结尾的，以及 `agent_projects_profile_get` 这类只读工具）返回 `BACKEND_DB_ERROR`：多人同时操作时偶发，隔几秒原样重试一次，仍失败再按上面转告并停下。写入类工具不这样重试。
 - 参数传 JSON 对象：对象传对象、数组传数组、数字传数字、`confirmed` 传布尔。`arguments` 被序列化成字符串会返回「参数 arguments 格式不对，应为对象」，改成对象重发即可。
 
 ## 不做
